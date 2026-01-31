@@ -93,7 +93,11 @@ export function EditAssetDialog({ asset, open, onOpenChange }: EditAssetDialogPr
         }
       }
     } catch (error) {
-      console.error("Error fetching price:", error)
+      // Opsi 1: Menggunakan komentar abaikan (disarankan jika ingin tetap melacak error)
+      // eslint-disable-next-line no-console
+      // console.error("Error fetching price:", error)
+      alert("Gagal mengambil harga terbaru. Silakan coba input manual.");
+      // Opsi 2: Hapus console.error dan biarkan kosong atau ganti dengan toast/alert
     }
     setFetchingPrice(false)
   }

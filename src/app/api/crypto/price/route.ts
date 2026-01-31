@@ -32,7 +32,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ price, coinId })
   } catch (error) {
-    console.error("CoinGecko API error:", error)
     return NextResponse.json(
       { error: "Failed to fetch crypto price" },
       { status: 500 }
@@ -74,7 +73,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ prices })
   } catch (error) {
-    console.error("CoinGecko API error:", error)
     return NextResponse.json(
       { error: "Failed to fetch crypto prices" },
       { status: 500 }

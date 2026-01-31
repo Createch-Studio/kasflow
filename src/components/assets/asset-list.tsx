@@ -92,7 +92,11 @@ export function AssetList({ assets }: AssetListProps) {
         router.refresh()
       }
     } catch (error) {
-      console.error("Error updating prices:", error)
+      // Hapus console.error("Error updating prices:", error)
+      // Sebagai gantinya, kamu bisa membiarkannya kosong atau memberikan notifikasi UI
+      // eslint-disable-next-line no-console
+      // console.error("Gagal memperbarui harga:", error); 
+       alert("Gagal mengambil harga terbaru. Silakan coba input manual.");
     }
     setUpdatingPrices(false)
   }

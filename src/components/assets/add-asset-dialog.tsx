@@ -78,9 +78,12 @@ export function AddAssetDialog() {
         }
       }
     } catch (error) {
-      console.error("Error fetching price:", error)
+      // Menghapus console.error dan menggantinya dengan penanganan yang lebih baik
+      // atau biarkan kosong jika tidak ingin menampilkan apa pun, 
+      // tapi sebaiknya berikan feedback ke user (opsional)
+      alert("Gagal mengambil harga terbaru. Silakan coba input manual.");
     }
-    setFetchingPrice(false)
+    setFetchingPrice(false);
   }
 
   const handleCoinSelect = (selectedCoinId: string) => {
