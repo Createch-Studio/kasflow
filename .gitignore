@@ -15,6 +15,7 @@
 
 # production
 /build
+backup_fiflow_komplit.sql
 
 # misc
 .DS_Store
