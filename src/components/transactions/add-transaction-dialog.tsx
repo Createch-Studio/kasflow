@@ -80,8 +80,7 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
     const { error } = await supabase.from(targetTable).insert(payload)
 
     if (error) {
-      console.error("Error inserting:", error)
-      alert("Gagal menyimpan transaksi: " + error.message)
+      alert("Gagal menyimpan data: " + error.message)
     } else {
       setOpen(false)
       resetForm()
