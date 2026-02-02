@@ -8,186 +8,184 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select"
 import { Plus, Loader2 } from "lucide-react"
 import type { Category } from "@/lib/types"
 
 interface AddTransactionDialogProps {
-  categories: Category[]
+  categories: Category[]
 }
 
 export function AddTransactionDialog({ categories }: AddTransactionDialogProps) {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [type, setType] = useState<"income" | "expense">("expense")
-  const [amount, setAmount] = useState("")
-  const [categoryId, setCategoryId] = useState("")
-  const [description, setDescription] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
-  const router = useRouter()
-  const supabase = createClient()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [type, setType] = useState<"income" | "expense">("expense")
+  const [amount, setAmount] = useState("")
+  const [categoryId, setCategoryId] = useState("")
+  const [description, setDescription] = useState("")
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const router = useRouter()
+  const supabase = createClient()
 
-  const filteredCategories = categories.filter((c) => c.type === type)
+  const filteredCategories = categories.filter((c) => c.type === type)
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-  
-  // Validasi manual jika categoryId kosong
-  if (!categoryId || categoryId === "") {
-    alert("Silakan pilih kategori terlebih dahulu")
-    return
-  }
-    setLoading(true)
+    e.preventDefault()
+    
+    if (!categoryId || categoryId === "") {
+      alert("Silakan pilih kategori terlebih dahulu")
+      return
+    }
+    setLoading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-    await supabase.from("transactions").insert({
-      user_id: user.id,
-      type,
-      amount: parseFloat(amount),
-      category_id: categoryId,
-      description: description || null,
-      date,
-    })
+    await supabase.from("transactions").insert({
+      user_id: user.id,
+      type,
+      amount: parseFloat(amount),
+      category_id: categoryId,
+      description: description || null,
+      date,
+    })
 
-    setLoading(false)
-    setOpen(false)
-    resetForm()
-    router.refresh()
-  }
+    setLoading(false)
+    setOpen(false)
+    resetForm()
+    router.refresh()
+  }
 
-  const resetForm = () => {
-    setType("expense")
-    setAmount("")
-    setCategoryId("")
-    setDescription("")
-    setDate(new Date().toISOString().split("T")[0])
-  }
+  const resetForm = () => {
+    setType("expense")
+    setAmount("")
+    setCategoryId("")
+    setDescription("")
+    setDate(new Date().toISOString().split("T")[0])
+  }
 
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus className="mr-2 h-4 w-4" />
+          Tambah Transaksi
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Tambah Transaksi Baru</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Tipe Transaksi</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={type === "income" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => {
+                  setType("income")
+                  setCategoryId("")
+                }}
+              >
+                Pemasukan
+              </Button>
+              <Button
+                type="button"
+                variant={type === "expense" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => {
+                  setType("expense")
+                  setCategoryId("")
+                }}
+              >
+                Pengeluaran
+              </Button>
+            </div>
+          </div>
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Tambah Transaksi
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Tambah Transaksi Baru</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Tipe Transaksi</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={type === "income" ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => {
-                  setType("income")
-                  setCategoryId("")
-                }}
-              >
-                Pemasukan
-              </Button>
-              <Button
-                type="button"
-                variant={type === "expense" ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => {
-                  setType("expense")
-                  setCategoryId("")
-                }}
-              >
-                Pengeluaran
-              </Button>
-            </div>
-          </div>
+          <div className="space-y-2">
+            <Label htmlFor="amount">Jumlah (Rp)</Label>
+            <Input
+              id="amount"
+              type="number"
+              placeholder="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+              min="0"
+            />
+          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="amount">Jumlah (Rp)</Label>
-            <Input
-              id="amount"
-              type="number"
-              placeholder="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-              min="0"
-            />
-          </div>
+          <div className="space-y-2">
+            <Label htmlFor="category">Kategori</Label>
+            <Select value={categoryId} onValueChange={setCategoryId} required>
+              <SelectTrigger>
+                <SelectValue placeholder="Pilih kategori" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredCategories.length > 0 ? (
+                  filteredCategories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="" disabled>
+                    Buat dulu kategori {type === "income" ? "pemasukan" : "pengeluaran"}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="category">Kategori</Label>
-            <Select value={categoryId} onValueChange={setCategoryId} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih kategori" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredCategories.length > 0 ? (
-                  filteredCategories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="" disabled>
-                    Buat dulu kategori {type === "income" ? "pemasukan" : "pengeluaran"}
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="space-y-2">
+            <Label htmlFor="date">Tanggal</Label>
+            <Input
+              id="date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="date">Tanggal</Label>
-            <Input
-              id="date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-            />
-          </div>
+          <div className="space-y-2">
+            <Label htmlFor="description">Keterangan (Opsional)</Label>
+            <Textarea
+              id="description"
+              placeholder="Masukkan keterangan..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+            />
+          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Keterangan (Opsional)</Label>
-            <Textarea
-              id="description"
-              placeholder="Masukkan keterangan..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          <Button type="submit" className="w-full" disabled={loading || !categoryId}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Menyimpan...
-              </>
-            ) : (
-              "Simpan Transaksi"
-            )}
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
+          <Button type="submit" className="w-full" disabled={loading || !categoryId}>
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Menyimpan...
+              </>
+            ) : (
+              "Simpan Transaksi"
+            )}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
 }
