@@ -41,26 +41,54 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
 
   const filteredCategories = categories.filter((c) => c.type === type)
 
+  // FUNGSI HANDLESUBMIT TUNGGAL DENGAN VALIDASI
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // 1. Validasi Wajib Kategori
+    if (!categoryId || categoryId === "") {
+      alert("Silakan pilih kategori terlebih dahulu")
+      return
+    }
+
     setLoading(true)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    await supabase.from("transactions").insert({
+    // 2. Logika penentuan tabel berdasarkan file SQL Anda
+    // Pemasukan (income) -> tabel 'sales', Pengeluaran (expense) -> tabel 'expenses'
+    const isIncome = type === "income"
+    const targetTable = isIncome ? "sales" : "expenses"
+
+    // Menyesuaikan nama kolom sesuai schema SQL (sales menggunakan 'sale_date' dan 'total_amount')
+    const payload = isIncome ? {
       user_id: user.id,
-      type,
+      sale_date: date,
+      total_amount: parseFloat(amount),
+      notes: description || null,
+      // Jika tabel sales Anda belum memiliki category_id, pastikan sudah di-alter di SQL
+      category_id: categoryId 
+    } : {
+      user_id: user.id,
+      date: date,
       amount: parseFloat(amount),
-      category_id: categoryId || null,
-      description: description || null,
-      date,
-    })
+      description: description,
+      category_id: categoryId
+    }
+
+    const { error } = await supabase.from(targetTable).insert(payload)
+
+    if (error) {
+      console.error("Error inserting:", error)
+      alert("Gagal menyimpan transaksi: " + error.message)
+    } else {
+      setOpen(false)
+      resetForm()
+      router.refresh()
+    }
 
     setLoading(false)
-    setOpen(false)
-    resetForm()
-    router.refresh()
   }
 
   const resetForm = () => {
@@ -84,6 +112,7 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
           <DialogTitle>Tambah Transaksi Baru</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Tipe Transaksi */}
           <div className="space-y-2">
             <Label>Tipe Transaksi</Label>
             <div className="flex gap-2">
@@ -93,7 +122,7 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
                 className="flex-1"
                 onClick={() => {
                   setType("income")
-                  setCategoryId("")
+                  setCategoryId("") // Reset kategori saat pindah tipe
                 }}
               >
                 Pemasukan
@@ -112,6 +141,7 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
             </div>
           </div>
 
+          {/* Jumlah */}
           <div className="space-y-2">
             <Label htmlFor="amount">Jumlah (Rp)</Label>
             <Input
@@ -125,10 +155,15 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
             />
           </div>
 
+          {/* Kategori - WAJIB */}
           <div className="space-y-2">
             <Label htmlFor="category">Kategori</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger>
+            <Select 
+              value={categoryId} 
+              onValueChange={setCategoryId} 
+              required
+            >
+              <SelectTrigger id="category">
                 <SelectValue placeholder="Pilih kategori" />
               </SelectTrigger>
               <SelectContent>
@@ -147,6 +182,7 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
             </Select>
           </div>
 
+          {/* Tanggal */}
           <div className="space-y-2">
             <Label htmlFor="date">Tanggal</Label>
             <Input
@@ -158,6 +194,7 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
             />
           </div>
 
+          {/* Keterangan */}
           <div className="space-y-2">
             <Label htmlFor="description">Keterangan (Opsional)</Label>
             <Textarea
@@ -169,7 +206,11 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
             />
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={loading || !categoryId || categoryId === "none"}
+          >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
