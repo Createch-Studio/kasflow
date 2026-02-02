@@ -125,7 +125,7 @@ export function EditTransactionDialog({ transaction, categories }: EditTransacti
           {/* Kategori */}
           <div className="space-y-2">
             <Label htmlFor="edit-category">Kategori</Label>
-            <Select value={categoryId} onValueChange={setCategoryId} required>
+            <Select value={categoryId ?? ""} onValueChange={setCategoryId} required>
               <SelectTrigger>
                 <SelectValue placeholder="Pilih kategori" />
               </SelectTrigger>
