@@ -41,8 +41,14 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
 
   const filteredCategories = categories.filter((c) => c.type === type)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+  
+  // Validasi manual jika categoryId kosong
+  if (!categoryId || categoryId === "") {
+    alert("Silakan pilih kategori terlebih dahulu")
+    return
+  }
     setLoading(true)
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -52,7 +58,7 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
       user_id: user.id,
       type,
       amount: parseFloat(amount),
-      category_id: categoryId || null,
+      category_id: categoryId,
       description: description || null,
       date,
     })
@@ -71,34 +77,6 @@ export function AddTransactionDialog({ categories }: AddTransactionDialogProps) 
     setDate(new Date().toISOString().split("T")[0])
   }
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
-  
-  // Validasi manual jika categoryId kosong
-  if (!categoryId || categoryId === "") {
-    alert("Silakan pilih kategori terlebih dahulu")
-    return
-  }
-
-  setLoading(true)
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
-
-  await supabase.from("transactions").insert({
-    user_id: user.id,
-    type,
-    amount: parseFloat(amount),
-    category_id: categoryId, // Tidak perlu || null lagi karena wajib
-    description: description || null,
-    date,
-  })
-
-  setLoading(false)
-  setOpen(false)
-  resetForm()
-  router.refresh()
-}
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
