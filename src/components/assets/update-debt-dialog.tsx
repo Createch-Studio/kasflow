@@ -11,10 +11,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Loader2 } from "lucide-react"
 import type { Asset } from "@/lib/types"
 
@@ -27,7 +33,7 @@ interface UpdateDebtDialogProps {
 export function UpdateDebtDialog({ asset, open, onOpenChange }: UpdateDebtDialogProps) {
   const [loading, setLoading] = useState(false)
   const [amount, setAmount] = useState("")
-  const [paymentType, setPaymentType] = useState<"partial" | "full">("partial")
+  const [paymentType, setPaymentType] = useState<string>("partial")
   
   const router = useRouter()
   const supabase = createClient()
@@ -42,28 +48,25 @@ export function UpdateDebtDialog({ asset, open, onOpenChange }: UpdateDebtDialog
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // 1. Update saldo di tabel Assets
-      if (newValue <= 0) {
-        // Jika lunas, bisa pilih hapus atau set 0. Di sini kita set 0.
-        await supabase.from("assets").update({ value: 0, updated_at: new Date().toISOString() }).eq("id", asset.id)
-      } else {
-        await supabase.from("assets").update({ value: newValue, updated_at: new Date().toISOString() }).eq("id", asset.id)
-      }
+      // 1. Update saldo Assets
+      await supabase.from("assets").update({ 
+        value: newValue <= 0 ? 0 : newValue, 
+        updated_at: new Date().toISOString() 
+      }).eq("id", asset.id)
 
-      // 2. Catat ke tabel Transactions agar sinkron dengan laporan bulanan
+      // 2. Catat Transaksi
       await supabase.from("transactions").insert({
         user_id: user.id,
-        type: isDebt ? "expense" : "income", // Bayar utang = pengeluaran, terima piutang = pemasukan
+        type: isDebt ? "expense" : "income",
         amount: payAmount,
-        category_id: null, // Bisa disesuaikan jika ada kategori khusus 'Hutang'
-        description: `${isDebt ? 'Pembayaran' : 'Penerimaan'} ${asset.name}`,
+        description: `${isDebt ? 'Bayar' : 'Terima'} ${asset.name} (${paymentType === 'full' ? 'Lunas' : 'Cicil'})`,
         date: new Date().toISOString().split('T')[0],
       })
 
       onOpenChange(false)
       router.refresh()
     } catch (_error) {
-      alert("Terjadi kesalahan saat memperbarui data.")
+      alert("Gagal memperbarui data.")
     } finally {
       setLoading(false)
     }
@@ -71,48 +74,51 @@ export function UpdateDebtDialog({ asset, open, onOpenChange }: UpdateDebtDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>{isDebt ? "Bayar Utang" : "Terima Piutang"}</DialogTitle>
+          <DialogTitle>{isDebt ? "Update Utang" : "Update Piutang"}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
-          <div className="text-sm bg-muted p-3 rounded-lg">
-            <p className="text-muted-foreground">Total {isDebt ? "Utang" : "Piutang"}:</p>
-            <p className="text-lg font-bold">{formatCurrency(Number(asset.value))}</p>
+          <div className="bg-muted/50 p-4 rounded-xl border border-dashed text-center">
+            <p className="text-xs text-muted-foreground uppercase font-semibold">Sisa Saldo</p>
+            <p className="text-xl font-bold">{formatCurrency(Number(asset.value))}</p>
           </div>
           
-          <RadioGroup value={paymentType} onValueChange={(v: any) => setPaymentType(v)} className="grid grid-cols-2 gap-4">
-            <div>
-              <RadioGroupItem value="partial" id="partial" className="peer sr-only" />
-              <Label htmlFor="partial" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                <span>Sebagian</span>
-              </Label>
-            </div>
-            <div>
-              <RadioGroupItem value="full" id="full" className="peer sr-only" />
-              <Label htmlFor="full" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                <span>Pelunasan</span>
-              </Label>
-            </div>
-          </RadioGroup>
+          <div className="space-y-2">
+            <Label>Metode Update</Label>
+            <Select value={paymentType} onValueChange={setPaymentType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="partial">Bayar Sebagian (Cicil)</SelectItem>
+                <SelectItem value="full">Pelunasan (Full)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {paymentType === "partial" && (
             <div className="space-y-2">
-              <Label htmlFor="amount">Jumlah {isDebt ? "Dibayar" : "Diterima"}</Label>
+              <Label htmlFor="amount">Nominal yang {isDebt ? "Dibayar" : "Diterima"}</Label>
               <Input
                 id="amount"
                 type="number"
-                placeholder="Masukkan nominal..."
+                placeholder="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                autoFocus
               />
             </div>
           )}
         </div>
         <DialogFooter>
-          <Button onClick={handleUpdate} disabled={loading || (paymentType === 'partial' && !amount)}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Konfirmasi {isDebt ? "Pembayaran" : "Penerimaan"}
+          <Button 
+            className="w-full" 
+            onClick={handleUpdate} 
+            disabled={loading || (paymentType === 'partial' && !amount)}
+          >
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Simpan Perubahan
           </Button>
         </DialogFooter>
       </DialogContent>
