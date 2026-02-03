@@ -21,6 +21,7 @@ export interface Transaction {
   id: string
   user_id: string
   category_id: string | null
+  asset_id: string | null // Tambahkan baris ini agar terbaca di Edit/Add Dialog
   amount: number
   type: 'income' | 'expense'
   description: string | null
@@ -28,6 +29,7 @@ export interface Transaction {
   created_at: string
   updated_at: string
   category?: Category
+  asset?: Asset // Tambahkan juga ini jika nanti Anda melakukan JOIN query
 }
 
 export interface Budget {
