@@ -10,12 +10,14 @@ import {
   Home, 
   MoreHorizontal, 
   HandCoins, 
-  Landmark 
+  Landmark,
+  CreditCard // Icon baru untuk Spending Account
 } from "lucide-react"
 
-// Tambahkan piutang dan debt ke konfigurasi visual
+// Tambahkan spending_account ke konfigurasi visual
 const ASSET_CONFIG = {
-  cash: { label: "Tunai", icon: Wallet, color: "text-blue-500" },
+  spending_account: { label: "Spending", icon: CreditCard, color: "text-indigo-500" },
+  cash: { label: "Simpanan", icon: Wallet, color: "text-blue-500" },
   investment: { label: "Investasi", icon: TrendingUp, color: "text-green-500" },
   crypto: { label: "Crypto", icon: Bitcoin, color: "text-orange-500" },
   property: { label: "Properti", icon: Home, color: "text-purple-500" },
@@ -34,13 +36,13 @@ export default async function AssetsPage() {
 
   const assetsList = assets || []
 
-  // LOGIKA PENTING: Utang dikurangi dari total kekayaan
+  // LOGIKA: Utang dikurangi dari total kekayaan
   const totalAssets = assetsList.reduce((sum, a) => {
     if (a.type === 'debt') return sum - Number(a.value)
     return sum + Number(a.value)
   }, 0)
 
-  // Mengelompokkan total per kategori untuk tampilan card kecil
+  // Mengelompokkan total per kategori
   const assetsByType: Record<string, number> = assetsList.reduce((acc, asset) => {
     acc[asset.type] = (acc[asset.type] || 0) + Number(asset.value)
     return acc
@@ -56,39 +58,41 @@ export default async function AssetsPage() {
         <AddAssetDialog />
       </div>
 
-      <Card className="border-2 border-primary/20">
+      <Card className="border-2 border-primary/20 bg-primary/5">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
             Total Kekayaan Bersih (Net Worth)
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className={`text-3xl font-bold ${totalAssets < 0 ? 'text-red-600' : 'text-primary'}`}>
+          <p className={`text-4xl font-black ${totalAssets < 0 ? 'text-red-600' : 'text-primary'}`}>
             {formatCurrency(totalAssets)}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Total Aset - Total Utang
-          </p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-[10px] bg-background px-2 py-0.5 rounded border font-medium">
+              RUMUS: TOTAL ASET - TOTAL UTANG
+            </span>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Grid Kategori - Responsive col-2 ke col-4 */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      {/* Grid Kategori - Dioptimalkan untuk banyak kategori (8 item) */}
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
         {Object.entries(ASSET_CONFIG).map(([type, config]) => {
           const value = assetsByType[type] || 0
           const Icon = config.icon
           const isDebt = type === 'debt'
 
           return (
-            <Card key={type} className="overflow-hidden">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg bg-muted ${config.color}`}>
-                    <Icon className="h-5 w-5" />
+            <Card key={type} className="overflow-hidden border-none shadow-sm bg-muted/30">
+              <CardContent className="p-4">
+                <div className="flex flex-col gap-2">
+                  <div className={`p-2 w-fit rounded-lg bg-background shadow-sm ${config.color}`}>
+                    <Icon className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground truncate">{config.label}</p>
-                    <p className={`font-semibold text-sm truncate ${isDebt && value > 0 ? 'text-red-600' : ''}`}>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{config.label}</p>
+                    <p className={`font-bold text-xs truncate ${isDebt && value > 0 ? 'text-red-600' : ''}`}>
                       {isDebt && value > 0 ? "-" : ""}{formatCurrency(value)}
                     </p>
                   </div>
