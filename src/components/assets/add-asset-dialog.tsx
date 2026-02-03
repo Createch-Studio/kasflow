@@ -79,9 +79,13 @@ export function AddAssetDialog() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Sesi berakhir")
 
-      const rawValue = parseFloat(value) || 0
-      // UTANG: Disimpan sebagai NEGATIF agar bisa langsung di-SUM di database
-      const finalValue = type === "debt" ? -Math.abs(rawValue) : Math.abs(rawValue)
+      /**
+       * PERBAIKAN:
+       * Gunakan Math.abs() agar nilai selalu POSITIF saat masuk database.
+       * Ini dilakukan karena rumus di Dashboard Anda sudah menggunakan:
+       * Net Worth = Aset - Utang.
+       */
+      const finalValue = Math.abs(parseFloat(value) || 0)
 
       const { error } = await supabase.from("assets").insert({
         user_id: user.id,
@@ -90,7 +94,7 @@ export function AddAssetDialog() {
         quantity: (type === "crypto" || type === "investment") ? parseFloat(quantity) : null,
         buy_price: buyPrice ? parseFloat(buyPrice) : null,
         current_price: currentPrice ? parseFloat(currentPrice) : null,
-        value: finalValue,
+        value: finalValue, // Sekarang masuk sebagai angka positif (misal: 1000)
         coin_id: type === "crypto" ? coinId : null,
         description: description || null,
         currency: "IDR"
