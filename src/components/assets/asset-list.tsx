@@ -31,12 +31,12 @@ import {
   TrendingDown,
   ChevronDown,
   HandCoins,
-  Landmark
+  Landmark,
+  Filter
 } from "lucide-react"
 import { EditAssetDialog } from "./edit-asset-dialog"
 import type { Asset } from "@/lib/types"
 
-// Update ASSET_CONFIG untuk menyertakan Utang dan Piutang
 const ASSET_CONFIG = {
   cash: { label: "Tunai", icon: Wallet, color: "bg-blue-100 text-blue-600" },
   investment: { label: "Investasi", icon: TrendingUp, color: "bg-green-100 text-green-600" },
@@ -47,6 +47,16 @@ const ASSET_CONFIG = {
   other: { label: "Lainnya", icon: MoreHorizontal, color: "bg-gray-100 text-gray-600" },
 }
 
+const FILTER_OPTIONS = [
+  { value: "all", label: "Semua" },
+  { value: "cash", label: "Tunai" },
+  { value: "investment", label: "Investasi" },
+  { value: "crypto", label: "Crypto" },
+  { value: "property", label: "Properti" },
+  { value: "receivable", label: "Piutang" },
+  { value: "debt", label: "Utang" },
+]
+
 interface AssetListProps {
   assets: Asset[]
 }
@@ -55,11 +65,19 @@ export function AssetList({ assets }: AssetListProps) {
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [updatingPrices, setUpdatingPrices] = useState(false)
   const [visibleCount, setVisibleCount] = useState(10)
+  const [activeFilter, setActiveFilter] = useState("all")
   
   const router = useRouter()
   const supabase = createClient()
 
-  const displayedAssets = assets.slice(0, visibleCount)
+  // Logika Filter
+  const filteredAssets = assets.filter((asset) => {
+    if (activeFilter === "all") return true
+    return asset.type === activeFilter
+  })
+
+  // Pagination berdasarkan data yang sudah difilter
+  const displayedAssets = filteredAssets.slice(0, visibleCount)
 
   const handleLoadMore = () => {
     setVisibleCount((prev) => prev + 10)
@@ -74,39 +92,32 @@ export function AssetList({ assets }: AssetListProps) {
 
   const updateAllCryptoPrices = async () => {
     if (cryptoAssets.length === 0) return
-    
     setUpdatingPrices(true)
     try {
       const coinIds = [...new Set(cryptoAssets.map(a => a.coin_id).filter(Boolean))]
-      
       const response = await fetch("/api/crypto/price", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ coinIds }),
       })
-      
       const data = await response.json()
-      
       if (data.prices) {
         for (const asset of cryptoAssets) {
           if (asset.coin_id && data.prices[asset.coin_id]) {
             const newPrice = data.prices[asset.coin_id]
             const newValue = asset.quantity ? asset.quantity * newPrice : newPrice
-            
-            await supabase
-              .from("assets")
-              .update({
-                current_price: newPrice,
-                value: newValue,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", asset.id)
+            await supabase.from("assets").update({
+              current_price: newPrice,
+              value: newValue,
+              updated_at: new Date().toISOString(),
+            }).eq("id", asset.id)
           }
         }
         router.refresh()
       }
     } catch (error) {
-       alert("Gagal mengambil harga terbaru.");
+       console.error(error)
+       alert("Gagal memperbarui harga.");
     }
     setUpdatingPrices(false)
   }
@@ -124,25 +135,42 @@ export function AssetList({ assets }: AssetListProps) {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Daftar Aset & Kewajiban</CardTitle>
-          {cryptoAssets.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={updateAllCryptoPrices}
-              disabled={updatingPrices}
-            >
-              {updatingPrices ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memperbarui...</>
-              ) : (
-                <><RefreshCw className="mr-2 h-4 w-4" /> Update Harga Kripto</>
-              )}
-            </Button>
-          )}
+        <CardHeader className="space-y-4">
+          <div className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Daftar Aset & Kewajiban</CardTitle>
+            {activeFilter === "crypto" && cryptoAssets.length > 0 && (
+              <Button variant="outline" size="sm" onClick={updateAllCryptoPrices} disabled={updatingPrices}>
+                {updatingPrices ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Update Harga
+              </Button>
+            )}
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-2 px-2 no-scrollbar scrollbar-hide">
+            <div className="flex items-center gap-2 text-muted-foreground mr-2 shrink-0">
+              <Filter className="h-4 w-4" />
+              <span className="text-xs font-medium">Filter:</span>
+            </div>
+            {FILTER_OPTIONS.map((opt) => (
+              <Button
+                key={opt.value}
+                variant={activeFilter === opt.value ? "default" : "outline"}
+                size="sm"
+                className="rounded-full px-4 h-8 text-xs shrink-0"
+                onClick={() => {
+                  setActiveFilter(opt.value)
+                  setVisibleCount(10)
+                }}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
         </CardHeader>
+
         <CardContent>
-          {assets.length > 0 ? (
+          {displayedAssets.length > 0 ? (
             <div className="space-y-3">
               {displayedAssets.map((asset) => {
                 const config = ASSET_CONFIG[asset.type as keyof typeof ASSET_CONFIG] || ASSET_CONFIG.other
@@ -151,10 +179,7 @@ export function AssetList({ assets }: AssetListProps) {
                 const isDebt = asset.type === "debt"
                 
                 return (
-                  <div
-                    key={asset.id}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
-                  >
+                  <div key={asset.id} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
                       <div className={`p-2 rounded-lg shrink-0 ${config.color}`}>
                         <Icon className="h-5 w-5" />
@@ -162,61 +187,46 @@ export function AssetList({ assets }: AssetListProps) {
                       <div className="min-w-0 flex-1">
                         <p className="font-medium truncate">{asset.name}</p>
                         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                          <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                          <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-tight">
                             {config.label}
                           </Badge>
                           {asset.type === "crypto" && asset.quantity && (
-                            <span className="text-xs">
-                              Qty: {asset.quantity.toLocaleString('id-ID', { maximumFractionDigits: 8 })}
-                            </span>
+                            <span className="text-xs">Qty: {asset.quantity.toLocaleString('id-ID')}</span>
                           )}
                         </div>
-                        {asset.type === "crypto" && profitLoss && (
-                          <div className="flex items-center gap-1 mt-1">
-                            {profitLoss.amount >= 0 ? (
-                              <TrendingUp className="h-3 w-3 text-green-600" />
-                            ) : (
-                              <TrendingDown className="h-3 w-3 text-red-600" />
-                            )}
-                            <span className={`text-xs font-medium ${profitLoss.amount >= 0 ? "text-green-600" : "text-red-600"}`}>
-                              {profitLoss.amount >= 0 ? "+" : ""}
-                              {formatCurrency(profitLoss.amount)} ({profitLoss.percentage.toFixed(2)}%)
-                            </span>
-                          </div>
-                        )}
                       </div>
                     </div>
+
                     <div className="flex items-center gap-2 sm:gap-4">
                       <div className="text-right">
                         <p className={`font-semibold text-lg ${isDebt ? "text-red-600" : ""}`}>
                           {isDebt ? "-" : ""}{formatCurrency(Number(asset.value))}
                         </p>
-                        <p className="text-xs text-muted-foreground hidden sm:block">
-                          {formatDate(asset.updated_at)}
+                        <p className="text-[10px] text-muted-foreground hidden sm:block">
+                          Update: {formatDate(asset.updated_at)}
                         </p>
                       </div>
+
                       <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => setEditingAsset(asset)}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => setEditingAsset(asset)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="hover:text-destructive">
+                            <Button variant="ghost" size="icon" className="hover:text-destructive text-muted-foreground">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Hapus?</AlertDialogTitle>
-                              <AlertDialogDescription>Tindakan ini permanen.</AlertDialogDescription>
+                              <AlertDialogTitle>Hapus Data?</AlertDialogTitle>
+                              <AlertDialogDescription>Data ini akan dihapus permanen dari catatan keuangan Anda.</AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Batal</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(asset.id)}>Hapus</AlertDialogAction>
+                              <AlertDialogAction onClick={() => handleDelete(asset.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                Hapus
+                              </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
@@ -226,17 +236,19 @@ export function AssetList({ assets }: AssetListProps) {
                 )
               })}
 
-              {assets.length > visibleCount && (
+              {filteredAssets.length > visibleCount && (
                 <div className="flex justify-center pt-4">
-                  <Button variant="outline" onClick={handleLoadMore} className="w-full sm:w-auto gap-2">
+                  <Button variant="ghost" onClick={handleLoadMore} className="w-full gap-2 text-muted-foreground">
                     <ChevronDown className="h-4 w-4" />
-                    Lihat Aset Sebelumnya
+                    Lihat Lebih Banyak ({filteredAssets.length - visibleCount})
                   </Button>
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">Belum ada data.</div>
+            <div className="text-center py-20 text-muted-foreground border-2 border-dashed rounded-xl">
+              <p>Tidak ada data ditemukan untuk kategori ini.</p>
+            </div>
           )}
         </CardContent>
       </Card>
