@@ -34,6 +34,7 @@ import {
   Filter
 } from "lucide-react"
 import { EditAssetDialog } from "./edit-asset-dialog"
+import { UpdateDebtDialog } from "./update-debt-dialog"
 import type { Asset } from "@/lib/types"
 
 const ASSET_CONFIG = {
@@ -62,6 +63,7 @@ interface AssetListProps {
 
 export function AssetList({ assets }: AssetListProps) {
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
+  const [updatingAsset, setUpdatingAsset] = useState<Asset | null>(null)
   const [updatingPrices, setUpdatingPrices] = useState(false)
   const [visibleCount, setVisibleCount] = useState(10)
   const [activeFilter, setActiveFilter] = useState("all")
@@ -113,7 +115,7 @@ export function AssetList({ assets }: AssetListProps) {
         router.refresh()
       }
     } catch (_error) {
-       alert("Gagal memperbarui harga.");
+       // Silently fail or use a toast notification
     }
     setUpdatingPrices(false)
   }
@@ -123,7 +125,7 @@ export function AssetList({ assets }: AssetListProps) {
       <Card>
         <CardHeader className="space-y-4">
           <div className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Daftar Aset & Kewajiban</CardTitle>
+            <CardTitle className="text-base font-bold">Aset & Kewajiban</CardTitle>
             {activeFilter === "crypto" && cryptoAssets.length > 0 && (
               <Button variant="outline" size="sm" onClick={updateAllCryptoPrices} disabled={updatingPrices}>
                 {updatingPrices ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
@@ -132,6 +134,7 @@ export function AssetList({ assets }: AssetListProps) {
             )}
           </div>
 
+          {/* Filter Bar */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-2 px-2 no-scrollbar scrollbar-hide">
             <div className="flex items-center gap-2 text-muted-foreground mr-2 shrink-0">
               <Filter className="h-4 w-4" />
@@ -161,50 +164,59 @@ export function AssetList({ assets }: AssetListProps) {
                 const config = ASSET_CONFIG[asset.type as keyof typeof ASSET_CONFIG] || ASSET_CONFIG.other
                 const Icon = config.icon
                 const isDebt = asset.type === "debt"
+                const isDebtOrReceivable = asset.type === "debt" || asset.type === "receivable"
                 
                 return (
-                  <div key={asset.id} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+                  <div key={asset.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors gap-4">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
                       <div className={`p-2 rounded-lg shrink-0 ${config.color}`}>
                         <Icon className="h-5 w-5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium truncate">{asset.name}</p>
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                          <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-tight">
+                        <p className="font-semibold truncate">{asset.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="secondary" className="text-[10px] uppercase font-bold px-1.5 h-4">
                             {config.label}
                           </Badge>
-                          {asset.type === "crypto" && asset.quantity && (
-                            <span className="text-xs">Qty: {asset.quantity.toLocaleString('id-ID')}</span>
-                          )}
+                          <span className="text-[10px] text-muted-foreground">
+                            {formatDate(asset.updated_at)}
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 sm:gap-4">
+                    <div className="flex items-center justify-between sm:justify-end gap-4">
                       <div className="text-right">
-                        <p className={`font-semibold text-lg ${isDebt ? "text-red-600" : ""}`}>
+                        <p className={`font-bold text-lg leading-none ${isDebt ? "text-red-600" : "text-foreground"}`}>
                           {isDebt ? "-" : ""}{formatCurrency(Number(asset.value))}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground hidden sm:block">
-                          {formatDate(asset.updated_at)}
                         </p>
                       </div>
 
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => setEditingAsset(asset)}>
+                      <div className="flex items-center gap-1">
+                        {isDebtOrReceivable && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 text-[11px] px-2 gap-1 border-primary/20 hover:bg-primary/5"
+                            onClick={() => setUpdatingAsset(asset)}
+                          >
+                            <HandCoins className="h-3 w-3" />
+                            Update Saldo
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingAsset(asset)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="hover:text-destructive text-muted-foreground">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Hapus Data?</AlertDialogTitle>
-                              <AlertDialogDescription>Tindakan ini permanen.</AlertDialogDescription>
+                              <AlertDialogDescription>Tindakan ini tidak dapat dibatalkan.</AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Batal</AlertDialogCancel>
@@ -221,27 +233,36 @@ export function AssetList({ assets }: AssetListProps) {
               })}
 
               {filteredAssets.length > visibleCount && (
-                <div className="flex justify-center pt-4">
-                  <Button variant="ghost" onClick={handleLoadMore} className="w-full gap-2 text-muted-foreground">
-                    <ChevronDown className="h-4 w-4" />
-                    Lihat Lebih Banyak
+                <div className="flex justify-center pt-2">
+                  <Button variant="ghost" size="sm" onClick={handleLoadMore} className="text-muted-foreground text-xs">
+                    <ChevronDown className="mr-1 h-3 w-3" />
+                    Muat lebih banyak
                   </Button>
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-center py-20 text-muted-foreground border-2 border-dashed rounded-xl">
-              <p>Tidak ada data ditemukan.</p>
+            <div className="text-center py-16 text-muted-foreground border-2 border-dashed rounded-xl">
+              <p className="text-sm">Belum ada data di kategori ini.</p>
             </div>
           )}
         </CardContent>
       </Card>
 
+      {/* Modals */}
       {editingAsset && (
         <EditAssetDialog
           asset={editingAsset}
           open={!!editingAsset}
           onOpenChange={(open) => !open && setEditingAsset(null)}
+        />
+      )}
+
+      {updatingAsset && (
+        <UpdateDebtDialog
+          asset={updatingAsset}
+          open={!!updatingAsset}
+          onOpenChange={(open) => !open && setUpdatingAsset(null)}
         />
       )}
     </>
