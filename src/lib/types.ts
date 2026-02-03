@@ -45,7 +45,7 @@ export interface Budget {
   spent?: number
 }
 
-export type AssetType = 'cash' | 'investment' | 'crypto' | 'property' | 'debt' | 'receivable' | 'other'
+export type AssetType = 'spending_account' | 'cash' | 'investment' | 'crypto' | 'property' | 'debt' | 'receivable' | 'other'
 
 export interface Asset {
   id: string
