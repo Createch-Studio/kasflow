@@ -29,16 +29,21 @@ import {
   RefreshCw,
   Loader2,
   TrendingDown,
-  ChevronDown // Tambahkan ikon ini
+  ChevronDown,
+  HandCoins,
+  Landmark
 } from "lucide-react"
 import { EditAssetDialog } from "./edit-asset-dialog"
 import type { Asset } from "@/lib/types"
 
+// Update ASSET_CONFIG untuk menyertakan Utang dan Piutang
 const ASSET_CONFIG = {
   cash: { label: "Tunai", icon: Wallet, color: "bg-blue-100 text-blue-600" },
   investment: { label: "Investasi", icon: TrendingUp, color: "bg-green-100 text-green-600" },
   crypto: { label: "Crypto", icon: Bitcoin, color: "bg-orange-100 text-orange-600" },
   property: { label: "Properti", icon: Home, color: "bg-purple-100 text-purple-600" },
+  receivable: { label: "Piutang", icon: HandCoins, color: "bg-emerald-100 text-emerald-600" },
+  debt: { label: "Utang", icon: Landmark, color: "bg-red-100 text-red-600" },
   other: { label: "Lainnya", icon: MoreHorizontal, color: "bg-gray-100 text-gray-600" },
 }
 
@@ -49,14 +54,11 @@ interface AssetListProps {
 export function AssetList({ assets }: AssetListProps) {
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [updatingPrices, setUpdatingPrices] = useState(false)
-  
-  // State untuk pagination
   const [visibleCount, setVisibleCount] = useState(10)
   
   const router = useRouter()
   const supabase = createClient()
 
-  // Filter data yang ditampilkan berdasarkan limit
   const displayedAssets = assets.slice(0, visibleCount)
 
   const handleLoadMore = () => {
@@ -104,7 +106,7 @@ export function AssetList({ assets }: AssetListProps) {
         router.refresh()
       }
     } catch (error) {
-       alert("Gagal mengambil harga terbaru. Silakan coba input manual.");
+       alert("Gagal mengambil harga terbaru.");
     }
     setUpdatingPrices(false)
   }
@@ -123,7 +125,7 @@ export function AssetList({ assets }: AssetListProps) {
     <>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Daftar Aset</CardTitle>
+          <CardTitle className="text-base">Daftar Aset & Kewajiban</CardTitle>
           {cryptoAssets.length > 0 && (
             <Button
               variant="outline"
@@ -132,15 +134,9 @@ export function AssetList({ assets }: AssetListProps) {
               disabled={updatingPrices}
             >
               {updatingPrices ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Memperbarui...
-                </>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memperbarui...</>
               ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Update Harga Kripto
-                </>
+                <><RefreshCw className="mr-2 h-4 w-4" /> Update Harga Kripto</>
               )}
             </Button>
           )}
@@ -148,10 +144,11 @@ export function AssetList({ assets }: AssetListProps) {
         <CardContent>
           {assets.length > 0 ? (
             <div className="space-y-3">
-              {displayedAssets.map((asset) => { // Menggunakan displayedAssets
+              {displayedAssets.map((asset) => {
                 const config = ASSET_CONFIG[asset.type as keyof typeof ASSET_CONFIG] || ASSET_CONFIG.other
                 const Icon = config.icon
                 const profitLoss = asset.type === "crypto" ? calculateProfitLoss(asset) : null
+                const isDebt = asset.type === "debt"
                 
                 return (
                   <div
@@ -165,17 +162,13 @@ export function AssetList({ assets }: AssetListProps) {
                       <div className="min-w-0 flex-1">
                         <p className="font-medium truncate">{asset.name}</p>
                         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                          <Badge variant="secondary">{config.label}</Badge>
+                          <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                            {config.label}
+                          </Badge>
                           {asset.type === "crypto" && asset.quantity && (
                             <span className="text-xs">
                               Qty: {asset.quantity.toLocaleString('id-ID', { maximumFractionDigits: 8 })}
                             </span>
-                          )}
-                          {asset.description && (
-                            <>
-                              <span className="hidden sm:inline">•</span>
-                              <span className="hidden sm:inline truncate">{asset.description}</span>
-                            </>
                           )}
                         </div>
                         {asset.type === "crypto" && profitLoss && (
@@ -185,9 +178,7 @@ export function AssetList({ assets }: AssetListProps) {
                             ) : (
                               <TrendingDown className="h-3 w-3 text-red-600" />
                             )}
-                            <span className={`text-xs font-medium ${
-                              profitLoss.amount >= 0 ? "text-green-600" : "text-red-600"
-                            }`}>
+                            <span className={`text-xs font-medium ${profitLoss.amount >= 0 ? "text-green-600" : "text-red-600"}`}>
                               {profitLoss.amount >= 0 ? "+" : ""}
                               {formatCurrency(profitLoss.amount)} ({profitLoss.percentage.toFixed(2)}%)
                             </span>
@@ -197,12 +188,9 @@ export function AssetList({ assets }: AssetListProps) {
                     </div>
                     <div className="flex items-center gap-2 sm:gap-4">
                       <div className="text-right">
-                        <p className="font-semibold text-lg">{formatCurrency(Number(asset.value))}</p>
-                        {asset.type === "crypto" && asset.current_price && (
-                          <p className="text-xs text-muted-foreground">
-                            @ Rp {asset.current_price.toLocaleString('id-ID')}
-                          </p>
-                        )}
+                        <p className={`font-semibold text-lg ${isDebt ? "text-red-600" : ""}`}>
+                          {isDebt ? "-" : ""}{formatCurrency(Number(asset.value))}
+                        </p>
                         <p className="text-xs text-muted-foreground hidden sm:block">
                           {formatDate(asset.updated_at)}
                         </p>
@@ -211,29 +199,24 @@ export function AssetList({ assets }: AssetListProps) {
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="text-muted-foreground hover:text-primary"
                           onClick={() => setEditingAsset(asset)}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
+                            <Button variant="ghost" size="icon" className="hover:text-destructive">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Hapus Aset?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tindakan ini tidak dapat dibatalkan. Aset akan dihapus secara permanen.
-                              </AlertDialogDescription>
+                              <AlertDialogTitle>Hapus?</AlertDialogTitle>
+                              <AlertDialogDescription>Tindakan ini permanen.</AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Batal</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(asset.id)}>
-                                Hapus
-                              </AlertDialogAction>
+                              <AlertDialogAction onClick={() => handleDelete(asset.id)}>Hapus</AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
@@ -243,14 +226,9 @@ export function AssetList({ assets }: AssetListProps) {
                 )
               })}
 
-              {/* Tombol Muat Lebih Banyak */}
               {assets.length > visibleCount && (
                 <div className="flex justify-center pt-4">
-                  <Button 
-                    variant="outline" 
-                    onClick={handleLoadMore}
-                    className="w-full sm:w-auto gap-2"
-                  >
+                  <Button variant="outline" onClick={handleLoadMore} className="w-full sm:w-auto gap-2">
                     <ChevronDown className="h-4 w-4" />
                     Lihat Aset Sebelumnya
                   </Button>
@@ -258,9 +236,7 @@ export function AssetList({ assets }: AssetListProps) {
               )}
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              Belum ada aset. Tambahkan aset pertama Anda!
-            </div>
+            <div className="text-center py-12 text-muted-foreground">Belum ada data.</div>
           )}
         </CardContent>
       </Card>
