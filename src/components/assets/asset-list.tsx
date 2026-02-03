@@ -31,14 +31,15 @@ import {
   ChevronDown,
   HandCoins,
   Landmark,
-  Filter
+  Filter,
+  CreditCard
 } from "lucide-react"
 import { EditAssetDialog } from "./edit-asset-dialog"
 import { UpdateDebtDialog } from "./update-debt-dialog"
 import type { Asset } from "@/lib/types"
 
 const ASSET_CONFIG = {
-  spending_account: { label: "Spending Account", icon: Landmark, color: "bg-indigo-100 text-indigo-600" },
+  spending_account: { label: "Spending Account", icon: CreditCard, color: "bg-indigo-100 text-indigo-600" },
   cash: { label: "Tunai", icon: Wallet, color: "bg-blue-100 text-blue-600" },
   investment: { label: "Investasi", icon: TrendingUp, color: "bg-green-100 text-green-600" },
   crypto: { label: "Crypto", icon: Bitcoin, color: "bg-orange-100 text-orange-600" },
@@ -50,6 +51,7 @@ const ASSET_CONFIG = {
 
 const FILTER_OPTIONS = [
   { value: "all", label: "Semua" },
+  { value: "spending_account", label: "Spending" },
   { value: "cash", label: "Tunai" },
   { value: "investment", label: "Investasi" },
   { value: "crypto", label: "Crypto" },
@@ -84,8 +86,12 @@ export function AssetList({ assets }: AssetListProps) {
   }
 
   const handleDelete = async (id: string) => {
-    await supabase.from("assets").delete().eq("id", id)
-    router.refresh()
+    try {
+      await supabase.from("assets").delete().eq("id", id)
+      router.refresh()
+    } catch (error) {
+      console.error("Error deleting asset:", error)
+    }
   }
 
   const cryptoAssets = assets.filter(a => a.type === "crypto" && a.coin_id)
@@ -115,10 +121,11 @@ export function AssetList({ assets }: AssetListProps) {
         }
         router.refresh()
       }
-    } catch (_error) {
-       // Silently fail or use a toast notification
+    } catch (error) {
+      console.error("Price update failed:", error)
+    } finally {
+      setUpdatingPrices(false)
     }
-    setUpdatingPrices(false)
   }
 
   return (
@@ -126,7 +133,7 @@ export function AssetList({ assets }: AssetListProps) {
       <Card>
         <CardHeader className="space-y-4">
           <div className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-bold">Aset & Kewajiban</CardTitle>
+            <CardTitle className="text-base font-bold">Daftar Rincian Aset</CardTitle>
             {activeFilter === "crypto" && cryptoAssets.length > 0 && (
               <Button variant="outline" size="sm" onClick={updateAllCryptoPrices} disabled={updatingPrices}>
                 {updatingPrices ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
@@ -135,7 +142,6 @@ export function AssetList({ assets }: AssetListProps) {
             )}
           </div>
 
-          {/* Filter Bar */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-2 px-2 no-scrollbar scrollbar-hide">
             <div className="flex items-center gap-2 text-muted-foreground mr-2 shrink-0">
               <Filter className="h-4 w-4" />
@@ -217,7 +223,7 @@ export function AssetList({ assets }: AssetListProps) {
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Hapus Data?</AlertDialogTitle>
-                              <AlertDialogDescription>Tindakan ini tidak dapat dibatalkan.</AlertDialogDescription>
+                              <AlertDialogDescription>Tindakan ini tidak dapat dibatalkan dan akan menghapus aset selamanya.</AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Batal</AlertDialogCancel>
@@ -244,13 +250,12 @@ export function AssetList({ assets }: AssetListProps) {
             </div>
           ) : (
             <div className="text-center py-16 text-muted-foreground border-2 border-dashed rounded-xl">
-              <p className="text-sm">Belum ada data di kategori ini.</p>
+              <p className="text-sm">Belum ada data untuk kategori filter ini.</p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Modals */}
       {editingAsset && (
         <EditAssetDialog
           asset={editingAsset}
