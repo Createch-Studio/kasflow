@@ -28,7 +28,6 @@ import {
   Pencil,
   RefreshCw,
   Loader2,
-  TrendingDown,
   ChevronDown,
   HandCoins,
   Landmark,
@@ -70,13 +69,11 @@ export function AssetList({ assets }: AssetListProps) {
   const router = useRouter()
   const supabase = createClient()
 
-  // Logika Filter
   const filteredAssets = assets.filter((asset) => {
     if (activeFilter === "all") return true
     return asset.type === activeFilter
   })
 
-  // Pagination berdasarkan data yang sudah difilter
   const displayedAssets = filteredAssets.slice(0, visibleCount)
 
   const handleLoadMore = () => {
@@ -115,21 +112,10 @@ export function AssetList({ assets }: AssetListProps) {
         }
         router.refresh()
       }
-    } catch (error) {
-       console.error(error)
+    } catch (_error) {
        alert("Gagal memperbarui harga.");
     }
     setUpdatingPrices(false)
-  }
-
-  const calculateProfitLoss = (asset: Asset) => {
-    if (!asset.quantity || !asset.buy_price || !asset.current_price) return null
-    const buyValue = asset.quantity * asset.buy_price
-    const currentValue = asset.quantity * asset.current_price
-    return {
-      amount: currentValue - buyValue,
-      percentage: ((currentValue - buyValue) / buyValue) * 100,
-    }
   }
 
   return (
@@ -146,7 +132,6 @@ export function AssetList({ assets }: AssetListProps) {
             )}
           </div>
 
-          {/* Filter Bar */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-2 px-2 no-scrollbar scrollbar-hide">
             <div className="flex items-center gap-2 text-muted-foreground mr-2 shrink-0">
               <Filter className="h-4 w-4" />
@@ -175,7 +160,6 @@ export function AssetList({ assets }: AssetListProps) {
               {displayedAssets.map((asset) => {
                 const config = ASSET_CONFIG[asset.type as keyof typeof ASSET_CONFIG] || ASSET_CONFIG.other
                 const Icon = config.icon
-                const profitLoss = asset.type === "crypto" ? calculateProfitLoss(asset) : null
                 const isDebt = asset.type === "debt"
                 
                 return (
@@ -203,7 +187,7 @@ export function AssetList({ assets }: AssetListProps) {
                           {isDebt ? "-" : ""}{formatCurrency(Number(asset.value))}
                         </p>
                         <p className="text-[10px] text-muted-foreground hidden sm:block">
-                          Update: {formatDate(asset.updated_at)}
+                          {formatDate(asset.updated_at)}
                         </p>
                       </div>
 
@@ -220,7 +204,7 @@ export function AssetList({ assets }: AssetListProps) {
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Hapus Data?</AlertDialogTitle>
-                              <AlertDialogDescription>Data ini akan dihapus permanen dari catatan keuangan Anda.</AlertDialogDescription>
+                              <AlertDialogDescription>Tindakan ini permanen.</AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Batal</AlertDialogCancel>
@@ -240,14 +224,14 @@ export function AssetList({ assets }: AssetListProps) {
                 <div className="flex justify-center pt-4">
                   <Button variant="ghost" onClick={handleLoadMore} className="w-full gap-2 text-muted-foreground">
                     <ChevronDown className="h-4 w-4" />
-                    Lihat Lebih Banyak ({filteredAssets.length - visibleCount})
+                    Lihat Lebih Banyak
                   </Button>
                 </div>
               )}
             </div>
           ) : (
             <div className="text-center py-20 text-muted-foreground border-2 border-dashed rounded-xl">
-              <p>Tidak ada data ditemukan untuk kategori ini.</p>
+              <p>Tidak ada data ditemukan.</p>
             </div>
           )}
         </CardContent>
