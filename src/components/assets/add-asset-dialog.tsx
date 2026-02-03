@@ -84,7 +84,7 @@ export function AddAssetDialog() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Sesi berakhir")
 
-      // Logic: Nilai negatif otomatis untuk utang
+      // LOGIKA KRUSIAL: Jika kategori adalah 'debt' (Utang), nilai harus NEGATIF
       const rawValue = parseFloat(value) || 0
       const finalValue = type === "debt" ? -Math.abs(rawValue) : rawValue
 
@@ -95,7 +95,7 @@ export function AddAssetDialog() {
         quantity: (type === "crypto" || type === "investment") ? parseFloat(quantity) : null,
         buy_price: buyPrice ? parseFloat(buyPrice) : null,
         current_price: currentPrice ? parseFloat(currentPrice) : null,
-        value: finalValue,
+        value: finalValue, // Nilai negatif dikirim ke database
         coin_id: type === "crypto" ? coinId : null,
         description: description || null,
         currency: "IDR"
@@ -103,8 +103,8 @@ export function AddAssetDialog() {
 
       if (error) throw error
 
-      setOpen(false)
       // Reset State
+      setOpen(false)
       setName("")
       setQuantity("")
       setBuyPrice("")
@@ -133,7 +133,7 @@ export function AddAssetDialog() {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Tambah Data Aset / Kewajiban</DialogTitle>
+          <DialogTitle>Tambah Data Keuangan</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -156,7 +156,7 @@ export function AddAssetDialog() {
             <div className="space-y-2">
               <Label>Nama Aset</Label>
               <Input 
-                placeholder="BCA, Rumah, ETH, dll" 
+                placeholder="Contoh: BCA, Rumah, ETH" 
                 value={name} 
                 onChange={(e) => setName(e.target.value)} 
                 required 
@@ -166,10 +166,10 @@ export function AddAssetDialog() {
 
           {type === "crypto" && (
             <div className="p-3 bg-blue-50/50 rounded-lg space-y-3 border border-blue-100">
-              <Label>Koneksi Market</Label>
+              <Label className="text-blue-700 font-semibold">Market Data (CoinGecko)</Label>
               <div className="flex gap-2">
                 <Select value={coinId} onValueChange={setCoinId}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Pilih Koin..." /></SelectTrigger>
+                  <SelectTrigger className="flex-1 bg-white"><SelectValue placeholder="Pilih Koin..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="bitcoin">Bitcoin (BTC)</SelectItem>
                     <SelectItem value="ethereum">Ethereum (ETH)</SelectItem>
@@ -180,6 +180,7 @@ export function AddAssetDialog() {
                 <Button 
                   type="button" variant="outline" size="icon" 
                   onClick={fetchLatestPrice} disabled={fetchingPrice}
+                  className="bg-white"
                 >
                   <RefreshCw className={`h-4 w-4 ${fetchingPrice ? "animate-spin" : ""}`} />
                 </Button>
@@ -213,9 +214,9 @@ export function AddAssetDialog() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>{isMarketAsset ? "Harga Saat Ini" : "Saldo / Nilai"}</Label>
+              <Label>{isMarketAsset ? "Harga Saat Ini" : (type === "debt" ? "Total Utang" : "Saldo / Nilai")}</Label>
               <Input 
-                type="number" value={currentPrice || value} 
+                type="number" value={isMarketAsset ? currentPrice : value} 
                 onChange={(e) => {
                   if(isMarketAsset) {
                     setCurrentPrice(e.target.value);
@@ -228,11 +229,11 @@ export function AddAssetDialog() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Total Nilai (Value)</Label>
+              <Label>Total Value {type === "debt" && "(Akan Negatif)"}</Label>
               <Input 
                 type="number" value={value} 
                 onChange={(e) => setValue(e.target.value)} 
-                className="bg-blue-50 font-bold text-blue-700"
+                className={`font-bold ${type === "debt" ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}
                 placeholder="Otomatis"
               />
             </div>
@@ -248,7 +249,7 @@ export function AddAssetDialog() {
           </div>
 
           <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
-            {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan Data Aset"}
+            {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan Data"}
           </Button>
         </form>
       </DialogContent>
