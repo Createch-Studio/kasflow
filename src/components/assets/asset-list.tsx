@@ -90,7 +90,7 @@ export function AssetList({ assets }: AssetListProps) {
       await supabase.from("assets").delete().eq("id", id)
       router.refresh()
     } catch (error) {
-      console.error("Error deleting asset:", error)
+      
     }
   }
 

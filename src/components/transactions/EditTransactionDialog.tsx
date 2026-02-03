@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -21,8 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Pencil, Loader2 } from "lucide-react"
-import type { Transaction, Category } from "@/lib/types"
+import { Pencil, Loader2, Wallet } from "lucide-react"
+import type { Transaction, Category, Asset } from "@/lib/types"
 
 interface EditTransactionDialogProps {
   transaction: Transaction
@@ -33,15 +33,29 @@ export function EditTransactionDialog({ transaction, categories }: EditTransacti
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   
-  // State diisi dengan data awal dari props transaction
+  // State awal
   const [type, setType] = useState<"income" | "expense">(transaction.type as "income" | "expense")
   const [amount, setAmount] = useState(transaction.amount.toString())
   const [categoryId, setCategoryId] = useState(transaction.category_id)
+  const [assetId, setAssetId] = useState(transaction.asset_id || "")
   const [description, setDescription] = useState(transaction.description || "")
   const [date, setDate] = useState(transaction.date)
+  const [assets, setAssets] = useState<Asset[]>([])
   
   const router = useRouter()
   const supabase = createClient()
+
+  // Ambil daftar aset untuk pilihan sumber dana
+  useEffect(() => {
+    async function fetchAssets() {
+      const { data } = await supabase
+        .from("assets")
+        .select("*")
+        .order("name", { ascending: true })
+      if (data) setAssets(data)
+    }
+    if (open) fetchAssets()
+  }, [open, supabase])
 
   const filteredCategories = categories.filter((c) => c.type === type)
 
@@ -49,24 +63,53 @@ export function EditTransactionDialog({ transaction, categories }: EditTransacti
     e.preventDefault()
     setLoading(true)
 
-    const { error } = await supabase
-      .from("transactions")
-      .update({
-        type,
-        amount: parseFloat(amount),
-        category_id: categoryId,
-        description: description || null,
-        date,
-      })
-      .eq("id", transaction.id)
+    try {
+      const newAmount = parseFloat(amount)
+      const oldAmount = transaction.amount
+      const oldAssetId = transaction.asset_id
+      const currentAssetId = assetId
 
-    if (error) {
-      alert("Gagal memperbarui transaksi")
-    } else {
+      // 1. UPDATE TRANSAKSI
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({
+          type,
+          amount: newAmount,
+          category_id: categoryId,
+          asset_id: currentAssetId,
+          description: description || null,
+          date,
+        })
+        .eq("id", transaction.id)
+
+      if (updateError) throw updateError
+
+      // 2. LOGIKA UPDATE SALDO ASET (RECONCILIATION)
+      // Langkah A: Batalkan dampak transaksi lama
+      if (oldAssetId) {
+        const reverseAdjustment = transaction.type === "expense" ? oldAmount : -oldAmount
+        await supabase.rpc('update_asset_balance', {
+          row_id: oldAssetId,
+          amount_change: reverseAdjustment
+        })
+      }
+
+      // Langkah B: Terapkan dampak transaksi baru
+      if (currentAssetId) {
+        const newAdjustment = type === "expense" ? -newAmount : newAmount
+        await supabase.rpc('update_asset_balance', {
+          row_id: currentAssetId,
+          amount_change: newAdjustment
+        })
+      }
+
       setOpen(false)
       router.refresh()
+    } catch (err: any) {
+      alert("Gagal memperbarui transaksi: " + err.message)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
@@ -122,6 +165,26 @@ export function EditTransactionDialog({ transaction, categories }: EditTransacti
             />
           </div>
 
+          {/* Aset / Sumber Dana */}
+          <div className="space-y-2">
+            <Label>Sumber Dana / Akun</Label>
+            <Select value={assetId} onValueChange={setAssetId} required>
+              <SelectTrigger>
+                <SelectValue placeholder="Pilih aset" />
+              </SelectTrigger>
+              <SelectContent>
+                {assets.map((asset) => (
+                  <SelectItem key={asset.id} value={asset.id}>
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-3 w-3 opacity-50" />
+                      <span>{asset.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Kategori */}
           <div className="space-y-2">
             <Label htmlFor="edit-category">Kategori</Label>
@@ -130,15 +193,11 @@ export function EditTransactionDialog({ transaction, categories }: EditTransacti
                 <SelectValue placeholder="Pilih kategori" />
               </SelectTrigger>
               <SelectContent>
-                {filteredCategories.length > 0 ? (
-                  filteredCategories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="" disabled>Belum ada kategori</SelectItem>
-                )}
+                {filteredCategories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -167,11 +226,11 @@ export function EditTransactionDialog({ transaction, categories }: EditTransacti
             />
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading || !categoryId}>
+          <Button type="submit" className="w-full" disabled={loading || !categoryId || !assetId}>
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Menyimpan...
+                Memperbarui...
               </>
             ) : (
               "Simpan Perubahan"
