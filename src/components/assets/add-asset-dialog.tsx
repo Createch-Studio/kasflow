@@ -33,29 +33,24 @@ export function AddAssetDialog() {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   
-  // Field Khusus
   const [quantity, setQuantity] = useState("") 
   const [buyPrice, setBuyPrice] = useState("")
   const [currentPrice, setCurrentPrice] = useState("")
   const [coinId, setCoinId] = useState("")
-  const [value, setValue] = useState("") // Total Nilai
+  const [value, setValue] = useState("") 
 
   const router = useRouter()
   const supabase = createClient()
 
-  // Ambil Harga Crypto Terbaru
   const fetchLatestPrice = async () => {
     if (!coinId) return alert("Pilih koin terlebih dahulu")
-    
     setFetchingPrice(true)
     try {
       const res = await fetch(`/api/crypto/price?ids=${coinId}`)
       const data = await res.json()
-      
       if (data.prices && data.prices[coinId]) {
         const price = data.prices[coinId]
         setCurrentPrice(price.toString())
-        
         if (quantity) {
           const total = parseFloat(quantity) * price
           setValue(Math.round(total).toString())
@@ -84,9 +79,9 @@ export function AddAssetDialog() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Sesi berakhir")
 
-      // LOGIKA KRUSIAL: Jika kategori adalah 'debt' (Utang), nilai harus NEGATIF
       const rawValue = parseFloat(value) || 0
-      const finalValue = type === "debt" ? -Math.abs(rawValue) : rawValue
+      // UTANG: Disimpan sebagai NEGATIF agar bisa langsung di-SUM di database
+      const finalValue = type === "debt" ? -Math.abs(rawValue) : Math.abs(rawValue)
 
       const { error } = await supabase.from("assets").insert({
         user_id: user.id,
@@ -95,7 +90,7 @@ export function AddAssetDialog() {
         quantity: (type === "crypto" || type === "investment") ? parseFloat(quantity) : null,
         buy_price: buyPrice ? parseFloat(buyPrice) : null,
         current_price: currentPrice ? parseFloat(currentPrice) : null,
-        value: finalValue, // Nilai negatif dikirim ke database
+        value: finalValue,
         coin_id: type === "crypto" ? coinId : null,
         description: description || null,
         currency: "IDR"
@@ -103,20 +98,11 @@ export function AddAssetDialog() {
 
       if (error) throw error
 
-      // Reset State
       setOpen(false)
-      setName("")
-      setQuantity("")
-      setBuyPrice("")
-      setCurrentPrice("")
-      setValue("")
-      setCoinId("")
-      setType("spending_account")
-      
+      setName(""); setQuantity(""); setBuyPrice(""); setCurrentPrice(""); setValue(""); setCoinId("");
       router.refresh()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Gagal simpan"
-      alert(msg)
+      alert(err instanceof Error ? err.message : "Gagal simpan")
     } finally {
       setLoading(false)
     }
@@ -132,9 +118,7 @@ export function AddAssetDialog() {
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Tambah Data Keuangan</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>Tambah Data Keuangan</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -155,18 +139,13 @@ export function AddAssetDialog() {
             </div>
             <div className="space-y-2">
               <Label>Nama Aset</Label>
-              <Input 
-                placeholder="Contoh: BCA, Rumah, ETH" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-                required 
-              />
+              <Input placeholder="BCA, Rumah, ETH" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
           </div>
 
           {type === "crypto" && (
             <div className="p-3 bg-blue-50/50 rounded-lg space-y-3 border border-blue-100">
-              <Label className="text-blue-700 font-semibold">Market Data (CoinGecko)</Label>
+              <Label className="text-blue-700 font-semibold text-xs uppercase">Market Price</Label>
               <div className="flex gap-2">
                 <Select value={coinId} onValueChange={setCoinId}>
                   <SelectTrigger className="flex-1 bg-white"><SelectValue placeholder="Pilih Koin..." /></SelectTrigger>
@@ -174,14 +153,9 @@ export function AddAssetDialog() {
                     <SelectItem value="bitcoin">Bitcoin (BTC)</SelectItem>
                     <SelectItem value="ethereum">Ethereum (ETH)</SelectItem>
                     <SelectItem value="solana">Solana (SOL)</SelectItem>
-                    <SelectItem value="tether">Tether (USDT)</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button 
-                  type="button" variant="outline" size="icon" 
-                  onClick={fetchLatestPrice} disabled={fetchingPrice}
-                  className="bg-white"
-                >
+                <Button type="button" variant="outline" size="icon" onClick={fetchLatestPrice} disabled={fetchingPrice} className="bg-white">
                   <RefreshCw className={`h-4 w-4 ${fetchingPrice ? "animate-spin" : ""}`} />
                 </Button>
               </div>
@@ -191,32 +165,22 @@ export function AddAssetDialog() {
           {isMarketAsset && (
             <div className="grid grid-cols-2 gap-4 p-3 bg-slate-50 rounded-lg border">
               <div className="space-y-2">
-                <Label>QTY (Jumlah)</Label>
-                <Input 
-                  type="number" step="any" value={quantity} 
-                  onChange={(e) => {
-                    setQuantity(e.target.value);
-                    calculateValue(e.target.value, currentPrice);
-                  }} 
-                  placeholder="0.00"
-                />
+                <Label>QTY</Label>
+                <Input type="number" step="any" value={quantity} onChange={(e) => { setQuantity(e.target.value); calculateValue(e.target.value, currentPrice); }} />
               </div>
               <div className="space-y-2">
-                <Label>Harga Beli (Satuan)</Label>
-                <Input 
-                  type="number" value={buyPrice} 
-                  onChange={(e) => setBuyPrice(e.target.value)} 
-                  placeholder="Rp"
-                />
+                <Label>Harga Beli</Label>
+                <Input type="number" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} />
               </div>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>{isMarketAsset ? "Harga Saat Ini" : (type === "debt" ? "Total Utang" : "Saldo / Nilai")}</Label>
+              <Label>{isMarketAsset ? "Harga Saat Ini" : "Nominal"}</Label>
               <Input 
-                type="number" value={isMarketAsset ? currentPrice : value} 
+                type="number" 
+                value={isMarketAsset ? currentPrice : value} 
                 onChange={(e) => {
                   if(isMarketAsset) {
                     setCurrentPrice(e.target.value);
@@ -225,30 +189,25 @@ export function AddAssetDialog() {
                     setValue(e.target.value);
                   }
                 }} 
-                placeholder="Rp"
               />
             </div>
             <div className="space-y-2">
-              <Label>Total Value {type === "debt" && "(Akan Negatif)"}</Label>
+              <Label>Total Nilai</Label>
               <Input 
-                type="number" value={value} 
+                type="number" 
+                value={value} 
                 onChange={(e) => setValue(e.target.value)} 
-                className={`font-bold ${type === "debt" ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}
-                placeholder="Otomatis"
+                className={`font-bold ${type === "debt" ? "text-red-600 bg-red-50" : "text-blue-700 bg-blue-50"}`}
               />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label>Keterangan</Label>
-            <Textarea 
-              placeholder="Catatan tambahan..." 
-              value={description} 
-              onChange={(e) => setDescription(e.target.value)} 
-            />
+            <Textarea placeholder="Opsional..." value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
 
-          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
+          <Button type="submit" className="w-full bg-blue-600" disabled={loading}>
             {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan Data"}
           </Button>
         </form>
