@@ -90,7 +90,7 @@ export function AssetList({ assets }: AssetListProps) {
       await supabase.from("assets").delete().eq("id", id)
       router.refresh()
     } catch (error) {
-      
+      alert("Gagal menghapus aset")
     }
   }
 
@@ -122,7 +122,7 @@ export function AssetList({ assets }: AssetListProps) {
         router.refresh()
       }
     } catch (error) {
-      console.error("Price update failed:", error)
+      alert("Gagal update harga crypto")
     } finally {
       setUpdatingPrices(false)
     }

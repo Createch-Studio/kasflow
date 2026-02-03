@@ -105,12 +105,12 @@ export function EditTransactionDialog({ transaction, categories }: EditTransacti
 
       setOpen(false)
       router.refresh()
-    } catch (err: any) {
-      alert("Gagal memperbarui transaksi: " + err.message)
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Terjadi kesalahan"
+      alert("Gagal memperbarui transaksi: " + errorMessage)
     } finally {
-      setLoading(false)
+  setLoading(false)
     }
-  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
