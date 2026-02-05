@@ -24,6 +24,30 @@ import {
 import { Plus, Loader2, RefreshCw } from "lucide-react"
 import type { AssetType } from "@/lib/types"
 
+const ASSET_TYPES: { value: AssetType; label: string }[] = [
+  { value: "spending_account", label: "Spending Account" },
+  { value: "cash", label: "Simpanan (Tunai/Bank)" },
+  { value: "investment", label: "Investasi" },
+  { value: "crypto", label: "Crypto" },
+  { value: "property", label: "Properti" },
+  { value: "receivable", label: "Piutang" },
+  { value: "debt", label: "Utang" },
+  { value: "other", label: "Lainnya" },
+]
+
+const POPULAR_COINS = [
+  { id: "bitcoin", name: "Bitcoin", symbol: "BTC" },
+  { id: "ethereum", name: "Ethereum", symbol: "ETH" },
+  { id: "binancecoin", name: "BNB", symbol: "BNB" },
+  { id: "solana", name: "Solana", symbol: "SOL" },
+  { id: "ripple", name: "XRP", symbol: "XRP" },
+  { id: "cardano", name: "Cardano", symbol: "ADA" },
+  { id: "dogecoin", name: "Dogecoin", symbol: "DOGE" },
+  { id: "tether", name: "USDT", symbol: "USDT" },
+  { id: "usdcoin", name: "USDC", symbol: "USDC" },
+  { id: "chainlink", name: "Chainlink", symbol: "LINK" },
+]
+
 export function AddAssetDialog() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -32,7 +56,6 @@ export function AddAssetDialog() {
   const [type, setType] = useState<AssetType>("spending_account")
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  
   const [quantity, setQuantity] = useState("") 
   const [buyPrice, setBuyPrice] = useState("")
   const [currentPrice, setCurrentPrice] = useState("")
@@ -42,52 +65,44 @@ export function AddAssetDialog() {
   const router = useRouter()
   const supabase = createClient()
 
-  // Label dinamis berdasarkan kategori
-  const getNameLabel = () => {
-    if (type === "debt") return "Nama Kreditur (Pemberi Utang)"
-    if (type === "receivable") return "Nama Debitur (Penerima Piutang)"
-    return "Nama Aset"
+  const isCrypto = type === "crypto"
+
+  const handleCoinSelect = (selectedCoinId: string) => {
+    setCoinId(selectedCoinId)
+    const coin = POPULAR_COINS.find(c => c.id === selectedCoinId)
+    if (coin) {
+      setName(`${coin.name} (${coin.symbol})`)
+    }
   }
 
-  const getPlaceholder = () => {
-    if (type === "debt") return "Contoh: Bank BCA, Teman A"
-    if (type === "receivable") return "Contoh: Teman B, Client X"
-    return "Contoh: Tabungan Utama, Rumah Kelapa Gading"
-  }
-
-  // PERBAIKAN: Fungsi fetch disesuaikan dengan struktur API Route Anda
-  const fetchLatestPrice = async () => {
-    if (!coinId) return alert("Pilih koin terlebih dahulu")
+  const fetchCryptoPrice = async () => {
+    if (!coinId) return
     setFetchingPrice(true)
     try {
-      const res = await fetch(`/api/crypto/price?coinId=${coinId}`)
-      const data = await res.json()
+      const response = await fetch(`/api/crypto/price?coinId=${coinId}`)
+      const data = await response.json()
+      // Menyesuaikan dengan struktur data.prices[coinId] atau data.price
+      const price = data.prices ? data.prices[coinId] : data.price
       
-      // Mengambil dari data.prices sesuai struktur yang kita buat di API
-      if (data.prices && data.prices[coinId]) {
-        const price = data.prices[coinId]
+      if (price) {
         setCurrentPrice(price.toString())
-        
-        // Update state 'value' (total nominal) secara otomatis
         if (quantity) {
-          const total = parseFloat(quantity) * price
-          setValue(Math.round(total).toString())
+          const calculatedValue = parseFloat(quantity) * price
+          setValue(Math.round(calculatedValue).toString())
         }
-      } else {
-        alert("Gagal mendapatkan harga untuk koin ini")
       }
-    } catch (err: unknown) {
-      alert("Gagal mengambil harga terbaru")
+    } catch (error) {
+      alert("Gagal mengambil harga terbaru.")
     } finally {
       setFetchingPrice(false)
     }
   }
 
-  const calculateValue = (qty: string, price: string) => {
-    const q = parseFloat(qty) || 0
-    const p = parseFloat(price) || 0
-    if (q > 0 || p > 0) {
-      setValue(Math.round(q * p).toString())
+  const handleQuantityChange = (qty: string) => {
+    setQuantity(qty)
+    if (currentPrice && qty) {
+      const calculatedValue = parseFloat(qty) * parseFloat(currentPrice)
+      setValue(Math.round(calculatedValue).toString())
     }
   }
 
@@ -99,18 +114,17 @@ export function AddAssetDialog() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Sesi berakhir")
 
-      // Pastikan nilai selalu positif sebelum masuk DB (dashboard pakai rumus Aset - Utang)
       const finalValue = Math.abs(parseFloat(value) || 0)
 
       const { error } = await supabase.from("assets").insert({
         user_id: user.id,
         name,
         type,
-        quantity: (type === "crypto" || type === "investment") ? parseFloat(quantity) : null,
+        quantity: (isCrypto || type === "investment") ? parseFloat(quantity) : null,
         buy_price: buyPrice ? parseFloat(buyPrice) : null,
         current_price: currentPrice ? parseFloat(currentPrice) : null,
         value: finalValue,
-        coin_id: type === "crypto" ? coinId : null,
+        coin_id: isCrypto ? coinId : null,
         description: description || null,
         currency: "IDR"
       })
@@ -118,17 +132,16 @@ export function AddAssetDialog() {
       if (error) throw error
 
       setOpen(false)
-      // Reset form
-      setName(""); setQuantity(""); setBuyPrice(""); setCurrentPrice(""); setValue(""); setCoinId(""); setDescription("");
+      // Reset Form
+      setName(""); setQuantity(""); setBuyPrice(""); setCurrentPrice(""); 
+      setValue(""); setCoinId(""); setDescription(""); setType("spending_account");
       router.refresh()
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Gagal simpan")
+    } catch (err: any) {
+      alert(err.message || "Gagal simpan")
     } finally {
       setLoading(false)
     }
   }
-
-  const isMarketAsset = type === "crypto" || type === "investment"
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -137,123 +150,141 @@ export function AddAssetDialog() {
           <Plus className="mr-2 h-4 w-4" /> Tambah Data
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tambah {type === "debt" ? "Kewajiban" : "Aset"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Kategori</Label>
-            <Select value={type} onValueChange={(v: AssetType) => {
-              setType(v);
-              setValue(""); // Reset value saat ganti kategori agar bersih
-            }}>
+            <Select value={type} onValueChange={(v: AssetType) => setType(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="spending_account">Spending Account</SelectItem>
-                <SelectItem value="cash">Simpanan (Tunai/Bank)</SelectItem>
-                <SelectItem value="property">Properti</SelectItem>
-                <SelectItem value="crypto">Crypto</SelectItem>
-                <SelectItem value="investment">Investasi Lainnya</SelectItem>
-                <SelectItem value="receivable">Piutang (Uang di Orang Lain)</SelectItem>
-                <SelectItem value="debt">Utang (Kewajiban)</SelectItem>
-                <SelectItem value="other">Lainnya</SelectItem>
+                {ASSET_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
+          {isCrypto && (
+            <>
+              <div className="space-y-2">
+                <Label>Pilih Koin</Label>
+                <Select value={coinId} onValueChange={handleCoinSelect}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih cryptocurrency..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {POPULAR_COINS.map((coin) => (
+                      <SelectItem key={coin.id} value={coin.id}>
+                        {coin.name} ({coin.symbol})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Jumlah (Qty)</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="0.00"
+                    value={quantity}
+                    onChange={(e) => handleQuantityChange(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Harga Beli (Rp)</Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={buyPrice}
+                    onChange={(e) => setBuyPrice(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Harga Saat Ini (Rp)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={currentPrice}
+                    onChange={(e) => {
+                      setCurrentPrice(e.target.value)
+                      if (quantity && e.target.value) {
+                        const calc = parseFloat(quantity) * parseFloat(e.target.value)
+                        setValue(Math.round(calc).toString())
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={fetchCryptoPrice}
+                    disabled={!coinId || fetchingPrice}
+                  >
+                    {fetchingPrice ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              {quantity && buyPrice && currentPrice && (
+                <div className="p-3 rounded-lg bg-slate-50 border text-xs space-y-1">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Estimasi Modal:</span>
+                    <span>Rp {(parseFloat(quantity) * parseFloat(buyPrice)).toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex justify-between font-medium pt-1 border-t">
+                    <span>Profit/Loss:</span>
+                    <span className={parseFloat(currentPrice) >= parseFloat(buyPrice) ? "text-green-600" : "text-red-600"}>
+                      {parseFloat(currentPrice) >= parseFloat(buyPrice) ? "+" : ""}
+                      Rp {((parseFloat(quantity) * parseFloat(currentPrice)) - (parseFloat(quantity) * parseFloat(buyPrice))).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
           <div className="space-y-2">
-            <Label>{getNameLabel()}</Label>
+            <Label>{type === "debt" ? "Nama Kreditur" : "Nama Aset"}</Label>
             <Input 
-              placeholder={getPlaceholder()} 
               value={name} 
               onChange={(e) => setName(e.target.value)} 
               required 
+              placeholder="Contoh: Bitcoin, Tabungan BCA, dll"
             />
           </div>
 
-          {type === "crypto" && (
-            <div className="p-3 bg-blue-50/50 rounded-lg space-y-3 border border-blue-100">
-              <Label className="text-blue-700 font-semibold text-xs uppercase">Koneksi Market</Label>
-              <div className="flex gap-2">
-                <Select value={coinId} onValueChange={setCoinId}>
-                  <SelectTrigger className="flex-1 bg-white"><SelectValue placeholder="Pilih Koin..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bitcoin">Bitcoin (BTC)</SelectItem>
-                    <SelectItem value="ethereum">Ethereum (ETH)</SelectItem>
-                    <SelectItem value="solana">Solana (SOL)</SelectItem>
-                    <SelectItem value="ripple">XRP (XRP)</SelectItem>
-                    <SelectItem value="chainlink">Chainlink (LINK)</SelectItem>
-                    <SelectItem value="usdcoin">USDC (USDC)</SelectItem>
-                    <SelectItem value="tether">Tether (USDT)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button type="button" variant="outline" size="icon" onClick={fetchLatestPrice} disabled={fetchingPrice} className="bg-white">
-                  <RefreshCw className={`h-4 w-4 ${fetchingPrice ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {isMarketAsset && (
-            <div className="grid grid-cols-2 gap-4 p-3 bg-slate-50 rounded-lg border">
-              <div className="space-y-2">
-                <Label>Jumlah (QTY)</Label>
-                <Input 
-                  type="number" 
-                  step="any" 
-                  value={quantity} 
-                  onChange={(e) => { 
-                    setQuantity(e.target.value); 
-                    calculateValue(e.target.value, currentPrice); 
-                  }} 
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Harga Beli</Label>
-                <Input 
-                  type="number" 
-                  value={buyPrice} 
-                  onChange={(e) => setBuyPrice(e.target.value)} 
-                  placeholder="Rp"
-                />
-              </div>
-            </div>
-          )}
-
           <div className="space-y-2">
-            <Label>
-              {isMarketAsset ? "Harga Pasar Saat Ini (Per Unit)" : "Nominal / Saldo"}
-            </Label>
+            <Label>Total Nilai / Saldo (Rp)</Label>
             <Input 
               type="number" 
-              value={isMarketAsset ? currentPrice : value} 
-              onChange={(e) => {
-                if(isMarketAsset) {
-                  setCurrentPrice(e.target.value);
-                  calculateValue(quantity, e.target.value);
-                } else {
-                  setValue(e.target.value);
-                }
-              }} 
-              placeholder="Masukkan angka..."
-              className={type === "debt" ? "focus-visible:ring-red-500" : ""}
+              value={value} 
+              onChange={(e) => setValue(e.target.value)} 
+              required
+              readOnly={isCrypto && !!quantity && !!currentPrice}
+              className={isCrypto && !!quantity && !!currentPrice ? "bg-muted" : ""}
             />
-            {type === "debt" && <p className="text-[10px] text-red-500 italic">*Akan mengurangi total kekayaan bersih</p>}
           </div>
 
           <div className="space-y-2">
             <Label>Keterangan (Opsional)</Label>
             <Textarea 
-              placeholder="Tambahkan catatan jika perlu..." 
               value={description} 
               onChange={(e) => setDescription(e.target.value)} 
+              rows={2}
             />
           </div>
 
           <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
-            {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan Data"}
+            {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan Aset"}
           </Button>
         </form>
       </DialogContent>
