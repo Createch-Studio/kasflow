@@ -11,10 +11,11 @@ import {
   MoreHorizontal, 
   HandCoins, 
   Landmark,
-  CreditCard // Icon baru untuk Spending Account
+  CreditCard,
+  ArrowUpRight,
+  ArrowDownRight
 } from "lucide-react"
 
-// Tambahkan spending_account ke konfigurasi visual
 const ASSET_CONFIG = {
   spending_account: { label: "Spending", icon: CreditCard, color: "text-indigo-500" },
   cash: { label: "Simpanan", icon: Wallet, color: "text-blue-500" },
@@ -36,7 +37,7 @@ export default async function AssetsPage() {
 
   const assetsList = assets || []
 
-  // LOGIKA: Utang dikurangi dari total kekayaan
+  // LOGIKA: Total Kekayaan Bersih
   const totalAssets = assetsList.reduce((sum, a) => {
     if (a.type === 'debt') return sum - Number(a.value)
     return sum + Number(a.value)
@@ -48,6 +49,18 @@ export default async function AssetsPage() {
     return acc
   }, {} as Record<string, number>)
 
+  // LOGIKA KHUSUS CRYPTO: Menghitung Profit/Loss Kumulatif
+  const cryptoAssets = assetsList.filter(a => a.type === "crypto")
+  const totalCryptoValue = assetsByType["crypto"] || 0
+  
+  const totalCryptoInvestment = cryptoAssets.reduce((sum, a) => {
+    return sum + (Number(a.quantity || 0) * Number(a.buy_price || 0))
+  }, 0)
+
+  const cryptoChangePercent = totalCryptoInvestment > 0 
+    ? ((totalCryptoValue - totalCryptoInvestment) / totalCryptoInvestment) * 100 
+    : 0
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -58,7 +71,8 @@ export default async function AssetsPage() {
         <AddAssetDialog />
       </div>
 
-      <Card className="border-2 border-primary/20 bg-primary/5">
+      {/* Net Worth Card */}
+      <Card className="border-2 border-primary/20 bg-primary/5 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
             Total Kekayaan Bersih (Net Worth)
@@ -76,12 +90,13 @@ export default async function AssetsPage() {
         </CardContent>
       </Card>
 
-      {/* Grid Kategori - Dioptimalkan untuk banyak kategori (8 item) */}
+      {/* Grid Kategori Statis */}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
         {Object.entries(ASSET_CONFIG).map(([type, config]) => {
           const value = assetsByType[type] || 0
           const Icon = config.icon
           const isDebt = type === 'debt'
+          const isCrypto = type === 'crypto'
 
           return (
             <Card key={type} className="overflow-hidden border-none shadow-sm bg-muted/30">
@@ -95,6 +110,21 @@ export default async function AssetsPage() {
                     <p className={`font-bold text-xs truncate ${isDebt && value > 0 ? 'text-red-600' : ''}`}>
                       {isDebt && value > 0 ? "-" : ""}{formatCurrency(value)}
                     </p>
+
+                    {/* Menampilkan Persentase Profit/Loss hanya untuk Card Crypto */}
+                    {isCrypto && totalCryptoInvestment > 0 && (
+                      <div className={`flex items-center gap-0.5 mt-0.5 text-[9px] font-bold ${
+                        cryptoChangePercent >= 0 ? "text-green-600" : "text-red-600"
+                      }`}>
+                        {cryptoChangePercent >= 0 ? (
+                          <ArrowUpRight className="h-2.5 w-2.5" />
+                        ) : (
+                          <ArrowDownRight className="h-2.5 w-2.5" />
+                        )}
+                        {cryptoChangePercent >= 0 ? "+" : ""}
+                        {cryptoChangePercent.toFixed(2)}%
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
