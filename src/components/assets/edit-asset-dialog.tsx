@@ -39,8 +39,8 @@ const POPULAR_COINS = [
   { id: "ripple", name: "XRP", symbol: "XRP" },
   { id: "cardano", name: "Cardano", symbol: "ADA" },
   { id: "dogecoin", name: "Dogecoin", symbol: "DOGE" },
-  { id: "polkadot", name: "Polkadot", symbol: "DOT" },
-  { id: "avalanche-2", name: "Avalanche", symbol: "AVAX" },
+  { id: "tether", name: "USDT", symbol: "USDT" },
+  { id: "usdcoin", name: "USDC", symbol: "USDC" },
   { id: "chainlink", name: "Chainlink", symbol: "LINK" },
 ]
 

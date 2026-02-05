@@ -32,7 +32,9 @@ import {
   HandCoins,
   Landmark,
   Filter,
-  CreditCard
+  CreditCard,
+  ArrowUpRight,
+  ArrowDownRight
 } from "lucide-react"
 import { EditAssetDialog } from "./edit-asset-dialog"
 import { UpdateDebtDialog } from "./update-debt-dialog"
@@ -174,6 +176,13 @@ export function AssetList({ assets }: AssetListProps) {
                 const isDebt = asset.type === "debt"
                 const isDebtOrReceivable = asset.type === "debt" || asset.type === "receivable"
                 
+                // Kalkulasi Persentase Profit/Loss untuk Crypto
+                const isCrypto = asset.type === "crypto"
+                let changePercent = 0
+                if (isCrypto && asset.buy_price && asset.current_price) {
+                  changePercent = ((asset.current_price - asset.buy_price) / asset.buy_price) * 100
+                }
+
                 return (
                   <div key={asset.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors gap-4">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -194,10 +203,22 @@ export function AssetList({ assets }: AssetListProps) {
                     </div>
 
                     <div className="flex items-center justify-between sm:justify-end gap-4">
-                      <div className="text-right">
+                      <div className="text-right flex flex-col items-end">
                         <p className={`font-bold text-lg leading-none ${isDebt ? "text-red-600" : "text-foreground"}`}>
                           {isDebt ? "-" : ""}{formatCurrency(Number(asset.value))}
                         </p>
+                        
+                        {/* Render Persentase hanya untuk Crypto yang punya harga beli */}
+                        {isCrypto && asset.buy_price && asset.current_price && (
+                          <div className={`flex items-center gap-1 mt-1 text-[11px] font-bold ${changePercent >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            {changePercent >= 0 ? (
+                              <ArrowUpRight className="h-3 w-3" />
+                            ) : (
+                              <ArrowDownRight className="h-3 w-3" />
+                            )}
+                            {changePercent >= 0 ? "+" : ""}{changePercent.toFixed(2)}%
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-1">

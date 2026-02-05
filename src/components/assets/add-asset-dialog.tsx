@@ -55,19 +55,26 @@ export function AddAssetDialog() {
     return "Contoh: Tabungan Utama, Rumah Kelapa Gading"
   }
 
+  // PERBAIKAN: Fungsi fetch disesuaikan dengan struktur API Route Anda
   const fetchLatestPrice = async () => {
     if (!coinId) return alert("Pilih koin terlebih dahulu")
     setFetchingPrice(true)
     try {
       const res = await fetch(`/api/crypto/price?coinId=${coinId}`)
       const data = await res.json()
-      if (data.prices) {
+      
+      // Mengambil dari data.prices sesuai struktur yang kita buat di API
+      if (data.prices && data.prices[coinId]) {
         const price = data.prices[coinId]
         setCurrentPrice(price.toString())
+        
+        // Update state 'value' (total nominal) secara otomatis
         if (quantity) {
-          const total = parseFloat(quantity) * data.price
+          const total = parseFloat(quantity) * price
           setValue(Math.round(total).toString())
         }
+      } else {
+        alert("Gagal mendapatkan harga untuk koin ini")
       }
     } catch (err: unknown) {
       alert("Gagal mengambil harga terbaru")
@@ -92,7 +99,7 @@ export function AddAssetDialog() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Sesi berakhir")
 
-      // Pastikan nilai selalu positif sebelum masuk DB (Aset - Utang di dashboard)
+      // Pastikan nilai selalu positif sebelum masuk DB (dashboard pakai rumus Aset - Utang)
       const finalValue = Math.abs(parseFloat(value) || 0)
 
       const { error } = await supabase.from("assets").insert({
@@ -111,7 +118,8 @@ export function AddAssetDialog() {
       if (error) throw error
 
       setOpen(false)
-      setName(""); setQuantity(""); setBuyPrice(""); setCurrentPrice(""); setValue(""); setCoinId("");
+      // Reset form
+      setName(""); setQuantity(""); setBuyPrice(""); setCurrentPrice(""); setValue(""); setCoinId(""); setDescription("");
       router.refresh()
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Gagal simpan")
@@ -136,7 +144,10 @@ export function AddAssetDialog() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Kategori</Label>
-            <Select value={type} onValueChange={(v: AssetType) => setType(v)}>
+            <Select value={type} onValueChange={(v: AssetType) => {
+              setType(v);
+              setValue(""); // Reset value saat ganti kategori agar bersih
+            }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="spending_account">Spending Account</SelectItem>
