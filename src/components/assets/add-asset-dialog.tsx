@@ -44,7 +44,7 @@ const POPULAR_COINS = [
   { id: "cardano", name: "Cardano", symbol: "ADA" },
   { id: "dogecoin", name: "Dogecoin", symbol: "DOGE" },
   { id: "tether", name: "USDT", symbol: "USDT" },
-  { id: "usdcoin", name: "USDC", symbol: "USDC" },
+  { id: "usd-coin", name: "USDC", symbol: "USDC" },
   { id: "chainlink", name: "Chainlink", symbol: "LINK" },
 ]
 
