@@ -136,8 +136,9 @@ export function AddAssetDialog() {
       setName(""); setQuantity(""); setBuyPrice(""); setCurrentPrice(""); 
       setValue(""); setCoinId(""); setDescription(""); setType("spending_account");
       router.refresh()
-    } catch (err: any) {
-      alert(err.message || "Gagal simpan")
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Gagal simpan"
+      alert(errorMessage)
     } finally {
       setLoading(false)
     }
