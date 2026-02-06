@@ -54,7 +54,7 @@ const ASSET_CONFIG = {
 const FILTER_OPTIONS = [
   { value: "all", label: "Semua" },
   { value: "spending_account", label: "Spending" },
-  { value: "cash", label: "Tunai" },
+  { value: "cash", label: "Simpanan" },
   { value: "investment", label: "Investasi" },
   { value: "crypto", label: "Crypto" },
   { value: "property", label: "Properti" },
