@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,8 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+
 import { Plus, Loader2, RefreshCw } from "lucide-react"
 import type { AssetType } from "@/lib/types"
+
+/* ================= CONSTANT ================= */
 
 const ASSET_TYPES: { value: AssetType; label: string }[] = [
   { value: "spending_account", label: "Spending Account" },
@@ -42,68 +46,83 @@ const POPULAR_COINS = [
   { id: "solana", name: "Solana", symbol: "SOL" },
   { id: "ripple", name: "XRP", symbol: "XRP" },
   { id: "cardano", name: "Cardano", symbol: "ADA" },
-  { id: "dogecoin", name: "Dogecoin", symbol: "DOGE" },
   { id: "tether", name: "USDT", symbol: "USDT" },
   { id: "usd-coin", name: "USDC", symbol: "USDC" },
-  { id: "chainlink", name: "Chainlink", symbol: "LINK" },
 ]
 
-export function AddAssetDialog() {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [fetchingPrice, setFetchingPrice] = useState(false)
-  
-  const [type, setType] = useState<AssetType>("spending_account")
-  const [name, setName] = useState("")
-  const [description, setDescription] = useState("")
-  const [quantity, setQuantity] = useState("") 
-  const [buyPrice, setBuyPrice] = useState("")
-  const [currentPrice, setCurrentPrice] = useState("")
-  const [coinId, setCoinId] = useState("")
-  const [value, setValue] = useState("") 
+/* ================= COMPONENT ================= */
 
+export function AddAssetDialog() {
   const router = useRouter()
   const supabase = createClient()
 
-  const isCrypto = type === "crypto"
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [fetchingPrice, setFetchingPrice] = useState(false)
 
-  const handleCoinSelect = (selectedCoinId: string) => {
-    setCoinId(selectedCoinId)
-    const coin = POPULAR_COINS.find(c => c.id === selectedCoinId)
-    if (coin) {
-      setName(`${coin.name} (${coin.symbol})`)
+  const [type, setType] = useState<AssetType>("spending_account")
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [quantity, setQuantity] = useState("")
+  const [buyPrice, setBuyPrice] = useState("")
+  const [currentPrice, setCurrentPrice] = useState("")
+  const [coinId, setCoinId] = useState("")
+  const [manualValue, setManualValue] = useState("")
+
+  const isCrypto = type === "crypto"
+  const isInvestment = type === "investment"
+
+  /* ================= DERIVED ================= */
+
+  const qty = Number(quantity) || 0
+  const buy = Number(buyPrice) || 0
+  const current = Number(currentPrice) || 0
+
+  const initialValue = useMemo(() => {
+    if (!qty || !buy) return 0
+    return Math.round(qty * buy)
+  }, [qty, buy])
+
+  const currentValue = useMemo(() => {
+    if (isCrypto || isInvestment) {
+      if (!qty || !current) return 0
+      return Math.round(qty * current)
     }
+    return Math.abs(Number(manualValue) || 0)
+  }, [qty, current, manualValue, isCrypto, isInvestment])
+
+  const profitLoss = currentValue - initialValue
+
+  /* ================= HANDLERS ================= */
+
+  const handleCoinSelect = (id: string) => {
+    setCoinId(id)
+    const coin = POPULAR_COINS.find(c => c.id === id)
+    if (coin) setName(`${coin.name} (${coin.symbol})`)
   }
 
   const fetchCryptoPrice = async () => {
     if (!coinId) return
     setFetchingPrice(true)
     try {
-      const response = await fetch(`/api/crypto/price?coinId=${coinId}`)
-      const data = await response.json()
-      // Menyesuaikan dengan struktur data.prices[coinId] atau data.price
-      const price = data.prices ? data.prices[coinId] : data.price
-      
-      if (price) {
-        setCurrentPrice(price.toString())
-        if (quantity) {
-          const calculatedValue = parseFloat(quantity) * price
-          setValue(Math.round(calculatedValue).toString())
-        }
-      }
-    } catch (error) {
-      alert("Gagal mengambil harga terbaru.")
+      const res = await fetch(`/api/crypto/price?coinId=${coinId}`)
+      const data = await res.json()
+      const price = data.price ?? data.prices?.[coinId]
+      if (price) setCurrentPrice(String(price))
     } finally {
       setFetchingPrice(false)
     }
   }
 
-  const handleQuantityChange = (qty: string) => {
-    setQuantity(qty)
-    if (currentPrice && qty) {
-      const calculatedValue = parseFloat(qty) * parseFloat(currentPrice)
-      setValue(Math.round(calculatedValue).toString())
-    }
+  const resetForm = () => {
+    setType("spending_account")
+    setName("")
+    setDescription("")
+    setQuantity("")
+    setBuyPrice("")
+    setCurrentPrice("")
+    setManualValue("")
+    setCoinId("")
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -111,38 +130,36 @@ export function AddAssetDialog() {
     setLoading(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error("Sesi berakhir")
-
-      const finalValue = Math.abs(parseFloat(value) || 0)
+      const { data } = await supabase.auth.getUser()
+      if (!data.user) throw new Error("Session expired")
 
       const { error } = await supabase.from("assets").insert({
-        user_id: user.id,
+        user_id: data.user.id,
         name,
         type,
-        quantity: (isCrypto || type === "investment") ? parseFloat(quantity) : null,
-        buy_price: buyPrice ? parseFloat(buyPrice) : null,
-        current_price: currentPrice ? parseFloat(currentPrice) : null,
-        value: finalValue,
+        quantity: isCrypto || isInvestment ? qty : null,
+        buy_price: buy || null,
+        current_price: current || null,
+        initial_value: isCrypto || isInvestment ? initialValue : null,
+        value: currentValue,
         coin_id: isCrypto ? coinId : null,
         description: description || null,
-        currency: "IDR"
+        currency: "IDR",
       })
 
       if (error) throw error
 
       setOpen(false)
-      // Reset Form
-      setName(""); setQuantity(""); setBuyPrice(""); setCurrentPrice(""); 
-      setValue(""); setCoinId(""); setDescription(""); setType("spending_account");
+      resetForm()
       router.refresh()
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Gagal simpan"
-      alert(errorMessage)
+    } catch (err: any) {
+      alert(err.message ?? "Gagal menyimpan data")
     } finally {
       setLoading(false)
     }
   }
+
+  /* ================= UI ================= */
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -151,101 +168,78 @@ export function AddAssetDialog() {
           <Plus className="mr-2 h-4 w-4" /> Tambah Data
         </Button>
       </DialogTrigger>
+
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tambah {type === "debt" ? "Kewajiban" : "Aset"}</DialogTitle>
+          <DialogTitle>Tambah Aset</DialogTitle>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
+          {/* TYPE */}
+          <div>
             <Label>Kategori</Label>
-            <Select value={type} onValueChange={(v: AssetType) => setType(v)}>
+            <Select value={type} onValueChange={v => setType(v as AssetType)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ASSET_TYPES.map((t) => (
+                {ASSET_TYPES.map(t => (
                   <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {isCrypto && (
+          {/* CRYPTO / INVESTMENT */}
+          {(isCrypto || isInvestment) && (
             <>
-              <div className="space-y-2">
-                <Label>Pilih Koin</Label>
-                <Select value={coinId} onValueChange={handleCoinSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih cryptocurrency..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POPULAR_COINS.map((coin) => (
-                      <SelectItem key={coin.id} value={coin.id}>
-                        {coin.name} ({coin.symbol})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {isCrypto && (
+                <div>
+                  <Label>Pilih Koin</Label>
+                  <Select value={coinId} onValueChange={handleCoinSelect}>
+                    <SelectTrigger><SelectValue placeholder="Pilih koin" /></SelectTrigger>
+                    <SelectContent>
+                      {POPULAR_COINS.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} ({c.symbol})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <Input placeholder="Qty" type="number" value={quantity} onChange={e => setQuantity(e.target.value)} />
+                <Input placeholder="Harga Beli" type="number" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Jumlah (Qty)</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    placeholder="0.00"
-                    value={quantity}
-                    onChange={(e) => handleQuantityChange(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Harga Beli (Rp)</Label>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={buyPrice}
-                    onChange={(e) => setBuyPrice(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Harga Saat Ini (Rp)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={currentPrice}
-                    onChange={(e) => {
-                      setCurrentPrice(e.target.value)
-                      if (quantity && e.target.value) {
-                        const calc = parseFloat(quantity) * parseFloat(e.target.value)
-                        setValue(Math.round(calc).toString())
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={fetchCryptoPrice}
-                    disabled={!coinId || fetchingPrice}
-                  >
-                    {fetchingPrice ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Harga Saat Ini"
+                  type="number"
+                  value={currentPrice}
+                  onChange={e => setCurrentPrice(e.target.value)}
+                />
+                {isCrypto && (
+                  <Button type="button" size="icon" variant="outline" onClick={fetchCryptoPrice}>
+                    {fetchingPrice ? <Loader2 className="animate-spin h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
                   </Button>
-                </div>
+                )}
               </div>
 
-              {quantity && buyPrice && currentPrice && (
-                <div className="p-3 rounded-lg bg-slate-50 border text-xs space-y-1">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Estimasi Modal:</span>
-                    <span>Rp {(parseFloat(quantity) * parseFloat(buyPrice)).toLocaleString('id-ID')}</span>
+              {qty > 0 && (
+                <div className="text-xs border rounded p-3 bg-muted">
+                  <div className="flex justify-between">
+                    <span>Modal Awal</span>
+                    <span>Rp {initialValue.toLocaleString("id-ID")}</span>
                   </div>
-                  <div className="flex justify-between font-medium pt-1 border-t">
-                    <span>Profit/Loss:</span>
-                    <span className={parseFloat(currentPrice) >= parseFloat(buyPrice) ? "text-green-600" : "text-red-600"}>
-                      {parseFloat(currentPrice) >= parseFloat(buyPrice) ? "+" : ""}
-                      Rp {((parseFloat(quantity) * parseFloat(currentPrice)) - (parseFloat(quantity) * parseFloat(buyPrice))).toLocaleString('id-ID')}
+                  <div className="flex justify-between">
+                    <span>Nilai Saat Ini</span>
+                    <span>Rp {currentValue.toLocaleString("id-ID")}</span>
+                  </div>
+                  <div className="flex justify-between font-medium border-t pt-1">
+                    <span>Profit / Loss</span>
+                    <span className={profitLoss >= 0 ? "text-green-600" : "text-red-600"}>
+                      {profitLoss >= 0 ? "+" : ""}Rp {profitLoss.toLocaleString("id-ID")}
                     </span>
                   </div>
                 </div>
@@ -253,39 +247,24 @@ export function AddAssetDialog() {
             </>
           )}
 
-          <div className="space-y-2">
-            <Label>{type === "debt" ? "Nama Kreditur" : "Nama Aset"}</Label>
-            <Input 
-              value={name} 
-              onChange={(e) => setName(e.target.value)} 
-              required 
-              placeholder="Contoh: Bitcoin, Tabungan BCA, dll"
-            />
-          </div>
+          {/* NAME */}
+          <Input placeholder="Nama Aset" value={name} onChange={e => setName(e.target.value)} required />
 
-          <div className="space-y-2">
-            <Label>Total Nilai / Saldo (Rp)</Label>
-            <Input 
-              type="number" 
-              value={value} 
-              onChange={(e) => setValue(e.target.value)} 
+          {/* MANUAL VALUE */}
+          {!isCrypto && !isInvestment && (
+            <Input
+              placeholder="Total Nilai (Rp)"
+              type="number"
+              value={manualValue}
+              onChange={e => setManualValue(e.target.value)}
               required
-              readOnly={isCrypto && !!quantity && !!currentPrice}
-              className={isCrypto && !!quantity && !!currentPrice ? "bg-muted" : ""}
             />
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <Label>Keterangan (Opsional)</Label>
-            <Textarea 
-              value={description} 
-              onChange={(e) => setDescription(e.target.value)} 
-              rows={2}
-            />
-          </div>
+          <Textarea placeholder="Keterangan (opsional)" value={description} onChange={e => setDescription(e.target.value)} />
 
-          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
-            {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan Aset"}
+          <Button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
+            {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan"}
           </Button>
         </form>
       </DialogContent>

@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,8 +21,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+
 import { Loader2, RefreshCw } from "lucide-react"
 import type { Asset, AssetType } from "@/lib/types"
+
+/* ================= CONSTANT ================= */
 
 const ASSET_TYPES: { value: AssetType; label: string }[] = [
   { value: "spending_account", label: "Spending Account" },
@@ -40,12 +44,11 @@ const POPULAR_COINS = [
   { id: "binancecoin", name: "BNB", symbol: "BNB" },
   { id: "solana", name: "Solana", symbol: "SOL" },
   { id: "ripple", name: "XRP", symbol: "XRP" },
-  { id: "cardano", name: "Cardano", symbol: "ADA" },
-  { id: "dogecoin", name: "Dogecoin", symbol: "DOGE" },
   { id: "tether", name: "USDT", symbol: "USDT" },
   { id: "usd-coin", name: "USDC", symbol: "USDC" },
-  { id: "chainlink", name: "Chainlink", symbol: "LINK" },
 ]
+
+/* ================= TYPES ================= */
 
 interface EditAssetDialogProps {
   asset: Asset
@@ -53,70 +56,85 @@ interface EditAssetDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-export function EditAssetDialog({ asset, open, onOpenChange }: EditAssetDialogProps) {
+/* ================= COMPONENT ================= */
+
+export function EditAssetDialog({
+  asset,
+  open,
+  onOpenChange,
+}: EditAssetDialogProps) {
+  const router = useRouter()
+  const supabase = createClient()
+
   const [loading, setLoading] = useState(false)
   const [fetchingPrice, setFetchingPrice] = useState(false)
-  const [name, setName] = useState("")
+
   const [type, setType] = useState<AssetType>("cash")
-  const [value, setValue] = useState("")
+  const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [quantity, setQuantity] = useState("")
   const [buyPrice, setBuyPrice] = useState("")
   const [currentPrice, setCurrentPrice] = useState("")
+  const [manualValue, setManualValue] = useState("")
   const [coinId, setCoinId] = useState("")
-  const router = useRouter()
-  const supabase = createClient()
 
   const isCrypto = type === "crypto"
+  const isInvestment = type === "investment"
+
+  /* ================= INIT STATE ================= */
 
   useEffect(() => {
-    if (asset && open) {
-      setName(asset.name)
-      setType(asset.type)
-      setValue(asset.value?.toString() || "")
-      setDescription(asset.description || "")
-      setQuantity(asset.quantity?.toString() || "")
-      setBuyPrice(asset.buy_price?.toString() || "")
-      setCurrentPrice(asset.current_price?.toString() || "")
-      setCoinId(asset.coin_id || "")
-    }
+    if (!open) return
+
+    setType(asset.type)
+    setName(asset.name)
+    setDescription(asset.description ?? "")
+    setQuantity(asset.quantity?.toString() ?? "")
+    setBuyPrice(asset.buy_price?.toString() ?? "")
+    setCurrentPrice(asset.current_price?.toString() ?? "")
+    setManualValue(asset.value?.toString() ?? "")
+    setCoinId(asset.coin_id ?? "")
   }, [asset, open])
+
+  /* ================= DERIVED ================= */
+
+  const qty = Number(quantity) || 0
+  const buy = Number(buyPrice) || 0
+  const current = Number(currentPrice) || 0
+
+  const initialValue = useMemo(() => {
+    if (!qty || !buy) return 0
+    return Math.round(qty * buy)
+  }, [qty, buy])
+
+  const currentValue = useMemo(() => {
+    if (isCrypto || isInvestment) {
+      if (!qty || !current) return 0
+      return Math.round(qty * current)
+    }
+    return Math.abs(Number(manualValue) || 0)
+  }, [qty, current, manualValue, isCrypto, isInvestment])
+
+  const profitLoss = currentValue - initialValue
+
+  /* ================= HANDLERS ================= */
+
+  const handleCoinSelect = (id: string) => {
+    setCoinId(id)
+    const coin = POPULAR_COINS.find(c => c.id === id)
+    if (coin) setName(`${coin.name} (${coin.symbol})`)
+  }
 
   const fetchCryptoPrice = async () => {
     if (!coinId) return
     setFetchingPrice(true)
     try {
-      const response = await fetch(`/api/crypto/price?coinId=${coinId}`)
-      const data = await response.json()
-      const price = data.prices ? data.prices[coinId] : data.price
-      
-      if (price) {
-        setCurrentPrice(price.toString())
-        if (quantity) {
-          const calculatedValue = parseFloat(quantity) * (price as number)
-          setValue(Math.round(calculatedValue).toString())
-        }
-      }
-    } catch {
-      alert("Gagal mengambil harga terbaru. Silakan coba input manual.")
+      const res = await fetch(`/api/crypto/price?coinId=${coinId}`)
+      const data = await res.json()
+      const price = data.price ?? data.prices?.[coinId]
+      if (price) setCurrentPrice(String(price))
     } finally {
       setFetchingPrice(false)
-    }
-  }
-
-  const handleCoinSelect = (selectedCoinId: string) => {
-    setCoinId(selectedCoinId)
-    const coin = POPULAR_COINS.find(c => c.id === selectedCoinId)
-    if (coin) {
-      setName(`${coin.name} (${coin.symbol})`)
-    }
-  }
-
-  const handleQuantityChange = (newQuantity: string) => {
-    setQuantity(newQuantity)
-    if (currentPrice && newQuantity) {
-      const calculatedValue = parseFloat(newQuantity) * parseFloat(currentPrice)
-      setValue(Math.round(calculatedValue).toString())
     }
   }
 
@@ -125,180 +143,165 @@ export function EditAssetDialog({ asset, open, onOpenChange }: EditAssetDialogPr
     setLoading(true)
 
     try {
-        // PERBAIKAN: Menentukan tipe data secara eksplisit, bukan 'any'
-        const updateData: {
-          name: string;
-          type: AssetType;
-          value: number;
-          description: string | null;
-          updated_at: string;
-          quantity: number | null;
-          buy_price: number | null;
-          current_price: number | null;
-          coin_id: string | null;
-        } = {
-          name,
-          type,
-          value: parseFloat(value) || 0,
-          description: description || null,
-          updated_at: new Date().toISOString(),
-          quantity: isCrypto && quantity ? parseFloat(quantity) : null,
-          buy_price: isCrypto && buyPrice ? parseFloat(buyPrice) : null,
-          current_price: isCrypto && currentPrice ? parseFloat(currentPrice) : null,
-          coin_id: isCrypto ? coinId : null,
-        }
-    
-        const { error: updateError } = await supabase.from("assets").update(updateData).eq("id", asset.id)
-        if (updateError) throw updateError
+      const payload = {
+        name,
+        type,
+        description: description || null,
+        quantity: isCrypto || isInvestment ? qty : null,
+        buy_price: isCrypto || isInvestment ? buy || null : null,
+        current_price: isCrypto || isInvestment ? current || null : null,
+        initial_value: isCrypto || isInvestment ? initialValue : null,
+        value: currentValue,
+        coin_id: isCrypto ? coinId : null,
+        updated_at: new Date().toISOString(),
+      }
 
-        onOpenChange(false)
-        router.refresh()
-    } catch {
-        alert("Gagal menyimpan perubahan")
+      const { error } = await supabase
+        .from("assets")
+        .update(payload)
+        .eq("id", asset.id)
+
+      if (error) throw error
+
+      onOpenChange(false)
+      router.refresh()
+    } catch (err: any) {
+      alert(err.message ?? "Gagal menyimpan perubahan")
     } finally {
-        setLoading(false)
+      setLoading(false)
     }
   }
+
+  /* ================= UI ================= */
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit {type === "debt" ? "Kewajiban" : "Aset"}</DialogTitle>
+          <DialogTitle>Edit Aset</DialogTitle>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-type">Jenis Aset</Label>
-            <Select value={type} onValueChange={(v) => setType(v as AssetType)}>
-              <SelectTrigger id="edit-type">
-                <SelectValue />
-              </SelectTrigger>
+          {/* TYPE */}
+          <div>
+            <Label>Jenis Aset</Label>
+            <Select value={type} onValueChange={v => setType(v as AssetType)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ASSET_TYPES.map((assetType) => (
-                  <SelectItem key={assetType.value} value={assetType.value}>
-                    {assetType.label}
+                {ASSET_TYPES.map(t => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {isCrypto && (
+          {/* CRYPTO / INVESTMENT */}
+          {(isCrypto || isInvestment) && (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="edit-coin">Pilih Koin</Label>
-                <Select value={coinId} onValueChange={handleCoinSelect}>
-                  <SelectTrigger id="edit-coin">
-                    <SelectValue placeholder="Pilih cryptocurrency..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POPULAR_COINS.map((coin) => (
-                      <SelectItem key={coin.id} value={coin.id}>
-                        {coin.name} ({coin.symbol})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {isCrypto && (
+                <div>
+                  <Label>Pilih Koin</Label>
+                  <Select value={coinId} onValueChange={handleCoinSelect}>
+                    <SelectTrigger><SelectValue placeholder="Pilih koin" /></SelectTrigger>
+                    <SelectContent>
+                      {POPULAR_COINS.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} ({c.symbol})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  placeholder="Qty"
+                  type="number"
+                  value={quantity}
+                  onChange={e => setQuantity(e.target.value)}
+                />
+                <Input
+                  placeholder="Harga Beli"
+                  type="number"
+                  value={buyPrice}
+                  onChange={e => setBuyPrice(e.target.value)}
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-quantity">Jumlah (Qty)</Label>
-                    <Input
-                      id="edit-quantity"
-                      type="number"
-                      step="any"
-                      placeholder="0.00"
-                      value={quantity}
-                      onChange={(e) => handleQuantityChange(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-buyPrice">Harga Beli (Rp)</Label>
-                    <Input
-                      id="edit-buyPrice"
-                      type="number"
-                      placeholder="0"
-                      value={buyPrice}
-                      onChange={(e) => setBuyPrice(e.target.value)}
-                    />
-                  </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-currentPrice">Harga Saat Ini (Rp)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="edit-currentPrice"
-                    type="number"
-                    placeholder="0"
-                    value={currentPrice}
-                    onChange={(e) => {
-                      setCurrentPrice(e.target.value)
-                      if (quantity && e.target.value) {
-                        const calculatedValue = parseFloat(quantity) * parseFloat(e.target.value)
-                        setValue(Math.round(calculatedValue).toString())
-                      }
-                    }}
-                  />
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Harga Saat Ini"
+                  type="number"
+                  value={currentPrice}
+                  onChange={e => setCurrentPrice(e.target.value)}
+                />
+                {isCrypto && (
                   <Button
                     type="button"
-                    variant="outline"
                     size="icon"
+                    variant="outline"
                     onClick={fetchCryptoPrice}
                     disabled={!coinId || fetchingPrice}
                   >
-                    {fetchingPrice ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    {fetchingPrice ? (
+                      <Loader2 className="animate-spin h-4 w-4" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
                   </Button>
-                </div>
+                )}
               </div>
+
+              {qty > 0 && (
+                <div className="text-xs border rounded p-3 bg-muted">
+                  <div className="flex justify-between">
+                    <span>Modal Awal</span>
+                    <span>Rp {initialValue.toLocaleString("id-ID")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Nilai Saat Ini</span>
+                    <span>Rp {currentValue.toLocaleString("id-ID")}</span>
+                  </div>
+                  <div className="flex justify-between font-medium border-t pt-1">
+                    <span>Profit / Loss</span>
+                    <span className={profitLoss >= 0 ? "text-green-600" : "text-red-600"}>
+                      {profitLoss >= 0 ? "+" : ""}Rp {profitLoss.toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="edit-name">{type === "debt" ? "Nama Kreditur" : "Nama Aset"}</Label>
-            <Input
-              id="edit-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
+          {/* NAME */}
+          <Input value={name} onChange={e => setName(e.target.value)} required />
 
-          <div className="space-y-2">
-            <Label htmlFor="edit-value">Total Nilai (Rp)</Label>
+          {/* MANUAL VALUE */}
+          {!isCrypto && !isInvestment && (
             <Input
-              id="edit-value"
+              placeholder="Total Nilai (Rp)"
               type="number"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
+              value={manualValue}
+              onChange={e => setManualValue(e.target.value)}
               required
-              readOnly={isCrypto && !!quantity && !!currentPrice}
-              className={isCrypto && !!quantity && !!currentPrice ? "bg-muted" : ""}
             />
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="edit-description">Keterangan (Opsional)</Label>
-            <Textarea
-              id="edit-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-            />
-          </div>
+          <Textarea
+            placeholder="Keterangan (opsional)"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+          />
 
           <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Batal
             </Button>
-            <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={loading}>
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Simpan Perubahan"}
+            <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
+              {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan"}
             </Button>
           </div>
         </form>
