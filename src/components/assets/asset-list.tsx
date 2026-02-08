@@ -93,7 +93,7 @@ export function AssetList({ assets }: AssetListProps) {
       const { error } = await supabase.from("assets").delete().eq("id", id)
       if (error) throw error
       router.refresh()
-    } catch (_error) {
+    } catch {
       alert("Gagal menghapus aset")
     }
   }
@@ -125,7 +125,7 @@ export function AssetList({ assets }: AssetListProps) {
         }
         router.refresh()
       }
-    } catch (_error) {
+    } catch {
       alert("Gagal update harga crypto")
     } finally {
       setUpdatingPrices(false)
@@ -146,7 +146,7 @@ export function AssetList({ assets }: AssetListProps) {
             )}
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-2 px-2 no-scrollbar scrollbar-hide">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-2 px-2 no-scrollbar">
             <div className="flex items-center gap-2 text-muted-foreground mr-2 shrink-0">
               <Filter className="h-4 w-4" />
               <span className="text-xs font-medium">Filter:</span>
@@ -176,10 +176,15 @@ export function AssetList({ assets }: AssetListProps) {
                 const Icon = config.icon
                 const isDebt = asset.type === "debt"
                 const isDebtOrReceivable = asset.type === "debt" || asset.type === "receivable"
-                
                 const isCrypto = asset.type === "crypto"
+                const isInvestment = asset.type === "investment"
+                
+                // Hitung Modal Awal
+                const modalAwal = (asset.quantity && asset.buy_price) ? asset.quantity * asset.buy_price : 0
+                
+                // Hitung Perubahan Persen
                 let changePercent = 0
-                if (isCrypto && asset.buy_price && asset.current_price) {
+                if ((isCrypto || isInvestment) && asset.buy_price && asset.current_price) {
                   changePercent = ((asset.current_price - asset.buy_price) / asset.buy_price) * 100
                 }
 
@@ -211,19 +216,27 @@ export function AssetList({ assets }: AssetListProps) {
                     </div>
 
                     <div className="flex items-center justify-between sm:justify-end gap-4">
-                      <div className="text-right flex flex-col items-end">
+                      <div className="text-right flex flex-col items-end min-w-[120px]">
                         <p className={`font-bold text-lg leading-none ${isDebt ? "text-red-600" : "text-foreground"}`}>
                           {isDebt ? "-" : ""}{formatCurrency(Number(asset.value))}
                         </p>
                         
-                        {isCrypto && asset.buy_price && asset.current_price && (
-                          <div className={`flex items-center gap-1 mt-1 text-[11px] font-bold ${changePercent >= 0 ? "text-green-600" : "text-red-600"}`}>
-                            {changePercent >= 0 ? (
-                              <ArrowUpRight className="h-3 w-3" />
-                            ) : (
-                              <ArrowDownRight className="h-3 w-3" />
+                        {/* Menampilkan Modal dan % Change untuk Crypto & Investasi */}
+                        {(isCrypto || isInvestment) && asset.buy_price && (
+                          <div className="flex flex-col items-end mt-1 space-y-0.5">
+                            {modalAwal > 0 && (
+                              <span className="text-[10px] text-muted-foreground">
+                                Modal: {formatCurrency(modalAwal)}
+                              </span>
                             )}
-                            {changePercent >= 0 ? "+" : ""}{changePercent.toFixed(2)}%
+                            <div className={`flex items-center gap-0.5 text-[11px] font-bold ${changePercent >= 0 ? "text-green-600" : "text-red-600"}`}>
+                              {changePercent >= 0 ? (
+                                <ArrowUpRight className="h-3 w-3" />
+                              ) : (
+                                <ArrowDownRight className="h-3 w-3" />
+                              )}
+                              {changePercent >= 0 ? "+" : ""}{changePercent.toFixed(2)}%
+                            </div>
                           </div>
                         )}
                       </div>

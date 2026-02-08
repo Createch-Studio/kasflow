@@ -49,16 +49,26 @@ export default async function AssetsPage() {
     return acc
   }, {} as Record<string, number>)
 
-  // LOGIKA KHUSUS CRYPTO: Menghitung Profit/Loss Kumulatif
+  /* ================= LOGIKA PROFIT/LOSS (CRYPTO & INVESTASI) ================= */
+
+  // 1. Perhitungan Crypto
   const cryptoAssets = assetsList.filter(a => a.type === "crypto")
   const totalCryptoValue = assetsByType["crypto"] || 0
-  
   const totalCryptoInvestment = cryptoAssets.reduce((sum, a) => {
     return sum + (Number(a.quantity || 0) * Number(a.buy_price || 0))
   }, 0)
-
   const cryptoChangePercent = totalCryptoInvestment > 0 
     ? ((totalCryptoValue - totalCryptoInvestment) / totalCryptoInvestment) * 100 
+    : 0
+
+  // 2. Perhitungan Investasi (Baru Ditambahkan)
+  const invAssets = assetsList.filter(a => a.type === "investment")
+  const totalInvValue = assetsByType["investment"] || 0
+  const totalInvInvestment = invAssets.reduce((sum, a) => {
+    return sum + (Number(a.quantity || 0) * Number(a.buy_price || 0))
+  }, 0)
+  const invChangePercent = totalInvInvestment > 0 
+    ? ((totalInvValue - totalInvInvestment) / totalInvInvestment) * 100 
     : 0
 
   return (
@@ -97,6 +107,11 @@ export default async function AssetsPage() {
           const Icon = config.icon
           const isDebt = type === 'debt'
           const isCrypto = type === 'crypto'
+          const isInvestment = type === 'investment'
+
+          // Tentukan persentase mana yang dipakai
+          const currentChange = isCrypto ? cryptoChangePercent : isInvestment ? invChangePercent : 0
+          const hasInvestment = isCrypto ? totalCryptoInvestment > 0 : isInvestment ? totalInvInvestment > 0 : false
 
           return (
             <Card key={type} className="overflow-hidden border-none shadow-sm bg-muted/30">
@@ -111,18 +126,18 @@ export default async function AssetsPage() {
                       {isDebt && value > 0 ? "-" : ""}{formatCurrency(value)}
                     </p>
 
-                    {/* Menampilkan Persentase Profit/Loss hanya untuk Card Crypto */}
-                    {isCrypto && totalCryptoInvestment > 0 && (
+                    {/* Menampilkan Persentase Profit/Loss untuk Card Crypto & Investasi */}
+                    {(isCrypto || isInvestment) && hasInvestment && (
                       <div className={`flex items-center gap-0.5 mt-0.5 text-[9px] font-bold ${
-                        cryptoChangePercent >= 0 ? "text-green-600" : "text-red-600"
+                        currentChange >= 0 ? "text-green-600" : "text-red-600"
                       }`}>
-                        {cryptoChangePercent >= 0 ? (
+                        {currentChange >= 0 ? (
                           <ArrowUpRight className="h-2.5 w-2.5" />
                         ) : (
                           <ArrowDownRight className="h-2.5 w-2.5" />
                         )}
-                        {cryptoChangePercent >= 0 ? "+" : ""}
-                        {cryptoChangePercent.toFixed(2)}%
+                        {currentChange >= 0 ? "+" : ""}
+                        {currentChange.toFixed(2)}%
                       </div>
                     )}
                   </div>
