@@ -107,8 +107,11 @@ export function AddAssetDialog() {
     try {
       const res = await fetch(`/api/crypto/price?coinId=${coinId}`)
       const data = await res.json()
-      const price = data.price ?? data.prices?.[coinId]
+      // Menggunakan casting 'as' yang aman untuk menghindari 'any'
+      const price = (data.price ?? data.prices?.[coinId]) as number | undefined
       if (price) setCurrentPrice(String(price))
+    } catch {
+      alert("Gagal mengambil harga")
     } finally {
       setFetchingPrice(false)
     }
@@ -130,30 +133,30 @@ export function AddAssetDialog() {
     setLoading(true)
 
     try {
-      const { data } = await supabase.auth.getUser()
-      if (!data.user) throw new Error("Session expired")
+      const { data: authData } = await supabase.auth.getUser()
+      if (!authData.user) throw new Error("Session expired")
 
-      const { error } = await supabase.from("assets").insert({
-        user_id: data.user.id,
+      const { error: insertError } = await supabase.from("assets").insert({
+        user_id: authData.user.id,
         name,
         type,
         quantity: isCrypto || isInvestment ? qty : null,
         buy_price: buy || null,
         current_price: current || null,
-        initial_value: isCrypto || isInvestment ? initialValue : null,
         value: currentValue,
         coin_id: isCrypto ? coinId : null,
         description: description || null,
         currency: "IDR",
       })
 
-      if (error) throw error
+      if (insertError) throw insertError
 
       setOpen(false)
       resetForm()
       router.refresh()
-    } catch (err: any) {
-      alert(err.message ?? "Gagal menyimpan data")
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Gagal menyimpan data"
+      alert(msg)
     } finally {
       setLoading(false)
     }
@@ -171,11 +174,10 @@ export function AddAssetDialog() {
 
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tambah Aset</DialogTitle>
+          <DialogTitle>Tambah {type === "debt" ? "Kewajiban" : "Aset"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* TYPE */}
           <div>
             <Label>Kategori</Label>
             <Select value={type} onValueChange={v => setType(v as AssetType)}>
@@ -188,7 +190,6 @@ export function AddAssetDialog() {
             </Select>
           </div>
 
-          {/* CRYPTO / INVESTMENT */}
           {(isCrypto || isInvestment) && (
             <>
               {isCrypto && (
@@ -208,36 +209,41 @@ export function AddAssetDialog() {
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="Qty" type="number" value={quantity} onChange={e => setQuantity(e.target.value)} />
-                <Input placeholder="Harga Beli" type="number" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} />
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase text-muted-foreground">Qty</Label>
+                  <Input placeholder="0.00" type="number" step="any" value={quantity} onChange={e => setQuantity(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase text-muted-foreground">Harga Beli</Label>
+                  <Input placeholder="0" type="number" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} />
+                </div>
               </div>
 
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Harga Saat Ini"
-                  type="number"
-                  value={currentPrice}
-                  onChange={e => setCurrentPrice(e.target.value)}
-                />
-                {isCrypto && (
-                  <Button type="button" size="icon" variant="outline" onClick={fetchCryptoPrice}>
-                    {fetchingPrice ? <Loader2 className="animate-spin h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
-                  </Button>
-                )}
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase text-muted-foreground">Harga Saat Ini</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="0"
+                    type="number"
+                    value={currentPrice}
+                    onChange={e => setCurrentPrice(e.target.value)}
+                  />
+                  {isCrypto && (
+                    <Button type="button" size="icon" variant="outline" onClick={fetchCryptoPrice} disabled={fetchingPrice}>
+                      {fetchingPrice ? <Loader2 className="animate-spin h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {qty > 0 && (
-                <div className="text-xs border rounded p-3 bg-muted">
+                <div className="text-xs border rounded p-3 bg-muted/50 space-y-1">
                   <div className="flex justify-between">
-                    <span>Modal Awal</span>
+                    <span className="text-muted-foreground">Modal:</span>
                     <span>Rp {initialValue.toLocaleString("id-ID")}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Nilai Saat Ini</span>
-                    <span>Rp {currentValue.toLocaleString("id-ID")}</span>
-                  </div>
-                  <div className="flex justify-between font-medium border-t pt-1">
-                    <span>Profit / Loss</span>
+                  <div className="flex justify-between font-medium border-t pt-1 mt-1">
+                    <span>Estimasi Profit:</span>
                     <span className={profitLoss >= 0 ? "text-green-600" : "text-red-600"}>
                       {profitLoss >= 0 ? "+" : ""}Rp {profitLoss.toLocaleString("id-ID")}
                     </span>
@@ -247,24 +253,31 @@ export function AddAssetDialog() {
             </>
           )}
 
-          {/* NAME */}
-          <Input placeholder="Nama Aset" value={name} onChange={e => setName(e.target.value)} required />
+          <div className="space-y-1">
+            <Label>{type === "debt" ? "Nama Kreditur" : "Nama Aset"}</Label>
+            <Input placeholder="Contoh: Tabungan BCA" value={name} onChange={e => setName(e.target.value)} required />
+          </div>
 
-          {/* MANUAL VALUE */}
           {!isCrypto && !isInvestment && (
-            <Input
-              placeholder="Total Nilai (Rp)"
-              type="number"
-              value={manualValue}
-              onChange={e => setManualValue(e.target.value)}
-              required
-            />
+            <div className="space-y-1">
+              <Label>Total Nilai (Rp)</Label>
+              <Input
+                placeholder="0"
+                type="number"
+                value={manualValue}
+                onChange={e => setManualValue(e.target.value)}
+                required
+              />
+            </div>
           )}
 
-          <Textarea placeholder="Keterangan (opsional)" value={description} onChange={e => setDescription(e.target.value)} />
+          <div className="space-y-1">
+            <Label>Keterangan</Label>
+            <Textarea placeholder="Catatan tambahan..." value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+          </div>
 
           <Button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
-            {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan"}
+            {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Simpan Data"}
           </Button>
         </form>
       </DialogContent>
